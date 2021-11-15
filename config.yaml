@@ -1,1 +1,15 @@
-options: {}
+options:
+  vgpu-device-mappings:
+    type: string
+    default:
+    description: |
+      YAML-formatted dict (or JSON-formatted, since JSON is valid YAML) where
+      keys are vGPU types and values are physical addresses, e.g.
+      .
+      {'nvidia-35': ['0000:84:00.0', '0000:85:00.0'], 'nvidia-36': ['0000:86:00.0']}
+      .
+      See
+      https://docs.openstack.org/nova/ussuri/admin/virtual-gpu.html#enable-gpu-types-compute
+      and
+      https://docs.openstack.org/nova/ussuri/admin/virtual-gpu.html#how-to-discover-a-gpu-type
+      for more details.
