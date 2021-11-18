@@ -8,9 +8,7 @@ description: |
 tags:
 - openstack
 series:
-- bionic
 - focal
-- groovy
 - hirsute
 - impish
 subordinate: true
@@ -22,3 +20,11 @@ requires:
   juju-info:
     interface: juju-info
     scope: container
+resources:
+  nvidia-vgpu-software:
+    type: file
+    filename: nvidia-vgpu.deb
+    description: |
+      Proprietary NVIDIA vGPU host software (to be installed on compute nodes).
+      .
+      See https://docs.nvidia.com/grid/
