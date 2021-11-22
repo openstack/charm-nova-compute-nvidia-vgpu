@@ -1,0 +1,9 @@
+build
+layers
+.tox
+interfaces
+.testrepository
+.stestr
+*__pycache__*
+*.pyc
+/nova-compute-nvidia-vgpu.charm

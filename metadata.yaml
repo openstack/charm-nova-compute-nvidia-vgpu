@@ -1,0 +1,24 @@
+name: nova-compute-nvidia-vgpu
+summary: NVidia vGPU support for OpenStack Nova Compute
+maintainer: OpenStack Charmers <openstack-charmers@lists.ubuntu.com>
+description: |
+  OpenStack Compute, codenamed Nova, is a cloud computing fabric controller.
+  .
+  This charm provides NVidia vGPU support for Nova.
+tags:
+- openstack
+series:
+- bionic
+- focal
+- groovy
+- hirsute
+- impish
+subordinate: true
+provides:
+  nova-compute-subordinate:
+    interface: nova-compute-subordinate
+    scope: container
+requires:
+  juju-info:
+    interface: juju-info
+    scope: container
