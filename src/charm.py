@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 
 # Copyright 2021 Canonical Ltd
 #
@@ -15,24 +15,33 @@
 # limitations under the License.
 
 
-import json
+import logging
 
 from ops.charm import CharmBase
-from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus
+
+from ruamel.yaml import YAML
 
 
 class NovaComputeNvidiaVgpuCharm(CharmBase):
 
-    _stored = StoredState()
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(self.on.config_changed, self._on_config_changed)
 
     def _on_install(self, _):
+        """install hook."""
         self.unit.status = ActiveStatus('Unit is ready')
+
+    def _on_config_changed(self, _):
+        """config-changed hook."""
+        vgpu_device_mappings_str = self.config.get('vgpu-device-mappings')
+        if vgpu_device_mappings_str is not None:
+            vgpu_device_mappings = YAML().load(vgpu_device_mappings_str)
+            logging.debug('vgpu-device-mappings={}'.format(
+                vgpu_device_mappings))
 
 
 if __name__ == '__main__':
