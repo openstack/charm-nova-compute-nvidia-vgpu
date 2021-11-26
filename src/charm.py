@@ -47,7 +47,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        super().register_status_check(self.__check_status)
+        super().register_status_check(self._check_status)
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.start, self._on_start)
@@ -60,7 +60,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         """config-changed hook."""
         # NOTE(lourot): We want to re-install the software here if a new
         # version has just been provided as a charm resource.
-        self.__install_nvidia_software_if_needed()
+        self._install_nvidia_software_if_needed()
 
         vgpu_device_mappings_str = self.config.get('vgpu-device-mappings')
         if vgpu_device_mappings_str is not None:
@@ -76,7 +76,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         # the `install` hook because we want to be able to install software
         # after a reboot if NVIDIA hardware has then been added for the
         # first time.
-        self.__install_nvidia_software_if_needed()
+        self._install_nvidia_software_if_needed()
 
         # NOTE(lourot): this is used by OSBaseCharm.update_status():
         self._stored.is_started = True
@@ -88,11 +88,11 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         # unit, then no service should be expected to run by
         # OSBaseCharm.update_status(). Otherwise the services from the
         # RESTART_MAP are expected to run.
-        if not self.__is_nvidia_software_to_be_installed():
+        if not self._is_nvidia_software_to_be_installed():
             return []
         return super().services()
 
-    def __check_status(self):
+    def _check_status(self):
         """Determine the unit status to be set.
 
         :rtype: StatusBase
@@ -100,24 +100,24 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         unit_status_msg = ('no ' if not self._has_nvidia_gpu_hardware()
                            else '') + 'NVIDIA GPU found; '
 
-        installed_versions = self.__installed_nvidia_software_versions()
+        installed_versions = self._installed_nvidia_software_versions()
         if len(installed_versions) > 0:
             unit_status_msg += 'installed NVIDIA software: '
             unit_status_msg += ', '.join(installed_versions)
         else:
             unit_status_msg += 'no NVIDIA software installed'
 
-        if self.__is_nvidia_software_to_be_installed() and len(
+        if self._is_nvidia_software_to_be_installed() and len(
                 installed_versions) == 0:
             return BlockedStatus(unit_status_msg)
 
         return ActiveStatus('Unit is ready: ' + unit_status_msg)
 
-    def __install_nvidia_software_if_needed(self):
+    def _install_nvidia_software_if_needed(self):
         """Install the NVIDIA software on this unit if relevant."""
-        if self.__is_nvidia_software_to_be_installed():
+        if self._is_nvidia_software_to_be_installed():
             nvidia_software_path, nvidia_software_hash = (
-                self.__path_and_hash_nvidia_resource())
+                self._path_and_hash_nvidia_resource())
 
             if nvidia_software_path is None:
                 # No software has been provided as charm resource. We can't
@@ -139,7 +139,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
             self._stored.last_installed_resource_hash = nvidia_software_hash
 
     @cached
-    def __is_nvidia_software_to_be_installed(self):
+    def _is_nvidia_software_to_be_installed(self):
         """Determine whether the NVIDIA vGPU software is to be installed.
 
         :returns: True if the software is to be installed and set up on the
@@ -149,7 +149,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         return (self._has_nvidia_gpu_hardware() or
                 self.config.get('force-install-nvidia-vgpu'))
 
-    def __path_and_hash_nvidia_resource(self):
+    def _path_and_hash_nvidia_resource(self):
         """Get path to and hash of software provided as charm resource.
 
         :returns: Pair of path and hash. (None, None) if no charm resource has
@@ -164,7 +164,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
         return nvidia_vgpu_software_path, file_hash(nvidia_vgpu_software_path)
 
-    def __installed_nvidia_software_versions(self):
+    def _installed_nvidia_software_versions(self):
         """Get a list of installed NVIDIA vGPU software versions.
 
         :returns: List of versions
