@@ -25,11 +25,11 @@ class TestNovaComputeNvidiaVgpuCharm(unittest.TestCase):
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
-    def test_install(self):
+    def test_start(self):
         self.assertEqual(
             self.harness.framework.model.app.name,
             'nova-compute-nvidia-vgpu')
         # Test that charm is active upon installation.
-        self.harness.charm.on.install.emit()
+        self.harness.charm.on.start.emit()
         self.assertTrue(isinstance(
             self.harness.model.unit.status, ActiveStatus))

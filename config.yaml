@@ -13,3 +13,11 @@ options:
       and
       https://docs.openstack.org/nova/ussuri/admin/virtual-gpu.html#how-to-discover-a-gpu-type
       for more details.
+  force-install-nvidia-vgpu:
+    type: boolean
+    default: false
+    description: |
+      FOR TESTING ONLY. If true, the NVIDIA vGPU software will be installed and
+      set up on all units regardless of the presence of NVIDIA GPU hardware. If
+      false, the software will be installed and set up only on units where that
+      hardware is present.
