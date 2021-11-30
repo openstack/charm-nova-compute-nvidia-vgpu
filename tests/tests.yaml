@@ -1,10 +1,19 @@
 charm_name: nova-compute-nvidia-vgpu
 
 smoke_bundles:
-  - focal-xena
+  - focal-ussuri
 
 gate_bundles:
+  - focal-ussuri
+  - focal-victoria
+  - focal-wallaby
+  - focal-yoga
+  - hirsute-wallaby
+
+dev_bundles:
   - focal-xena
+  - impish-xena
+  - jammy-yoga
 
 configure:
   - zaza.openstack.charm_tests.glance.setup.add_cirros_image
@@ -16,3 +25,9 @@ configure:
 
 tests:
   - zaza.openstack.charm_tests.nova.tests.LTSGuestCreateTest
+
+tests_options:
+  force_deploy:
+  - hirsute-wallaby
+  - impish-xena
+  - jammy-yoga
