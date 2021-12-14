@@ -13,23 +13,95 @@
 # limitations under the License.
 
 import unittest
-from src.charm import NovaComputeNvidiaVgpuCharm
+
+from mock import MagicMock, patch
+
 from ops.model import ActiveStatus
 from ops.testing import Harness
 
+import src.charm
 
-class TestNovaComputeNvidiaVgpuCharm(unittest.TestCase):
+
+class CharmTestCase(unittest.TestCase):
+
+    def setUp(self, obj, patches):
+        super().setUp()
+        self.patches = patches
+        self.obj = obj
+        self.patch_all()
+
+    def patch(self, method):
+        _m = patch.object(self.obj, method)
+        mock = _m.start()
+        self.addCleanup(_m.stop)
+        return mock
+
+    def patch_all(self):
+        for method in self.patches:
+            setattr(self, method, self.patch(method))
+
+
+class MockLspciProperty:
+    def __init__(self, name):
+        self.name = name
+
+
+class MockLspciDevice:
+    def __init__(self, cls_name, vendor_name):
+        self.cls = MockLspciProperty(cls_name)
+        self.vendor = MockLspciProperty(vendor_name)
+
+
+class TestNovaComputeNvidiaVgpuCharm(CharmTestCase):
+
+    _PATCHES = [
+        'SimpleParser',
+    ]
+
+    _PCI_DEVICES_LIST_WITHOUT_GPU = [
+        # This is an NVIDIA device, but not a GPU card:
+        MockLspciDevice(cls_name='VGA compatible controller',
+                        vendor_name='NVIDIA Corporation'),
+    ]
+
+    _PCI_DEVICES_LIST_WITH_NVIDIA_GPU = [
+        # This is an NVIDIA device, but not a GPU card:
+        MockLspciDevice(cls_name='VGA compatible controller',
+                        vendor_name='NVIDIA Corporation'),
+        # This is an NVIDIA GPU card:
+        MockLspciDevice(cls_name='3D controller',
+                        vendor_name='NVIDIA Corporation'),
+    ]
 
     def setUp(self):
-        self.harness = Harness(NovaComputeNvidiaVgpuCharm)
+        super().setUp(src.charm, self._PATCHES)
+        self.harness = Harness(src.charm.NovaComputeNvidiaVgpuCharm)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
-    def test_start(self):
+    def test_has_nvidia_gpu_hardware_with_hw(self):
+        self.SimpleParser.return_value = MagicMock()
+        self.SimpleParser.return_value.run.return_value = (
+            self._PCI_DEVICES_LIST_WITH_NVIDIA_GPU)
+        self.assertTrue(
+            self.harness.charm._has_nvidia_gpu_hardware_notcached())
+
+    def test_has_nvidia_gpu_hardware_without_hw(self):
+        self.SimpleParser.return_value = MagicMock()
+        self.SimpleParser.return_value.run.return_value = (
+            self._PCI_DEVICES_LIST_WITHOUT_GPU)
+        self.assertFalse(
+            self.harness.charm._has_nvidia_gpu_hardware_notcached())
+
+    def test_init(self):
         self.assertEqual(
             self.harness.framework.model.app.name,
             'nova-compute-nvidia-vgpu')
-        # Test that charm is active upon installation.
+        self.assertFalse(self.harness.charm._stored.is_started)
+        self.assertIsNone(
+            self.harness.charm._stored.last_installed_resource_hash)
+
+    def test_start(self):
         self.harness.charm.on.start.emit()
         self.assertTrue(isinstance(
             self.harness.model.unit.status, ActiveStatus))

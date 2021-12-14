@@ -7,12 +7,12 @@ gate_bundles:
   - focal-ussuri
   - focal-victoria
   - focal-wallaby
+  - focal-xena
   - focal-yoga
   - hirsute-wallaby
+  - impish-xena
 
 dev_bundles:
-  - focal-xena
-  - impish-xena
   - jammy-yoga
 
 configure:

@@ -1,16 +1,89 @@
 - project:
     templates:
       - charm-yoga-unit-jobs
-      - charm-yoga-functional-jobs
-      - charm-xena-functional-jobs
-      - charm-wallaby-functional-jobs
-      - charm-victoria-functional-jobs
     check:
       jobs:
         # NOTE(lourot): adding `focal-ussuri` manually to the list here instead
         # of using `charm-ussuri-functional-jobs` as we don't support Bionic.
-        - focal-ussuri
+        - jammy-yoga-nvidia-vgpu:
+            voting: false
+        - impish-xena-nvidia-vgpu
+        - hirsute-wallaby-nvidia-vgpu
+        - focal-yoga-nvidia-vgpu
+        - focal-xena-nvidia-vgpu
+        - focal-wallaby-nvidia-vgpu
+        - focal-victoria-nvidia-vgpu
+        - focal-ussuri-nvidia-vgpu
     vars:
       needs_charm_build: true
       charm_build_name: nova-compute-nvidia-vgpu
       build_type: charmcraft
+
+- job:
+    name: jammy-yoga-nvidia-vgpu
+    description: Run a functional test against jammy-yoga
+    parent: func-target
+    dependencies: &smoke-jobs
+      - focal-ussuri-nvidia-vgpu
+    vars:
+      tox_extra_args: jammy-yoga
+- job:
+    name: impish-xena-nvidia-vgpu
+    description: Run a functional test against impish-xena
+    parent: func-target
+    dependencies: *smoke-jobs
+    vars:
+      tox_extra_args: impish-xena
+- job:
+    name: hirsute-wallaby-nvidia-vgpu
+    description: Run a functional test against hirsute-wallaby
+    parent: func-target
+    dependencies: *smoke-jobs
+    vars:
+      tox_extra_args: hirsute-wallaby
+- job:
+    name: focal-yoga-nvidia-vgpu
+    description: Run a functional test against focal-yoga
+    parent: func-target
+    dependencies: *smoke-jobs
+    vars:
+      tox_extra_args: focal-yoga
+- job:
+    name: focal-xena-nvidia-vgpu
+    description: Run a functional test against focal-xena
+    parent: func-target
+    dependencies: *smoke-jobs
+    vars:
+      tox_extra_args: focal-xena
+- job:
+    name: focal-wallaby-nvidia-vgpu
+    description: Run a functional test against focal-wallaby
+    parent: func-target
+    dependencies: *smoke-jobs
+    vars:
+      tox_extra_args: focal-wallaby
+- job:
+    name: focal-victoria-nvidia-vgpu
+    description: Run a functional test against focal-victoria
+    parent: func-target
+    dependencies: *smoke-jobs
+    vars:
+      tox_extra_args: focal-victoria
+- job:
+    name: focal-ussuri-nvidia-vgpu
+    description: Run a functional test against focal-ussuri
+    parent: func-target
+    dependencies:
+        # The soft dependencies mean that if they are not configured to run
+        # they will be ignored. See
+        # https://github.com/openstack-charmers/zosci-config
+      - charm-build
+      - osci-lint
+      - name: tox-py36
+        soft: true
+      - name: tox-py38
+        soft: true
+      - name: tox-py39
+        soft: true
+    vars:
+      tox_extra_args: focal-ussuri

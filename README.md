@@ -1,6 +1,6 @@
 # Overview
 
-This subordinate charm provides the NVidia vGPU support to the
+This subordinate charm provides the Nvidia vGPU support to the
 [OpenStack Nova Compute service][charm-nova-compute].
 
 # Bugs

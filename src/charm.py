@@ -173,20 +173,28 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         return [package['version'] for package in
                 apt_cache().dpkg_list(['nvidia-vgpu-ubuntu-*']).values()]
 
-    @staticmethod
+    @classmethod
     @cached
-    def _has_nvidia_gpu_hardware():
+    def _has_nvidia_gpu_hardware(cls):
         """Search for NVIDIA GPU hardware.
 
         :returns: True if some NVIDIA GPU hardware is found on the current
                   unit.
         :rtype: bool
         """
+        return cls._has_nvidia_gpu_hardware_notcached()
+
+    @staticmethod
+    def _has_nvidia_gpu_hardware_notcached():
         nvidia_gpu_hardware_found = False
         for device in SimpleParser().run():
             device_class = device.cls.name
             device_vendor = device.vendor.name
-            device_subsystem_vendor = device.subsystem_vendor.name
+            try:
+                device_subsystem_vendor = device.subsystem_vendor.name
+            except AttributeError:
+                device_subsystem_vendor = ''
+
             if '3D' in device_class and ('NVIDIA' in device_vendor or
                                          'NVIDIA' in device_subsystem_vendor):
                 logging.debug('NVIDIA GPU found: {}'.format(device))

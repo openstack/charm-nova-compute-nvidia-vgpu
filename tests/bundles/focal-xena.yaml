@@ -1,3 +1,5 @@
+local_overlay_enabled: False
+
 variables:
   openstack-origin: &openstack-origin cloud:focal-xena
 
@@ -165,7 +167,7 @@ applications:
       - '10'
 
   nova-compute-nvidia-vgpu:
-    charm: ../../../nova-compute-nvidia-vgpu
+    charm: ../../nova-compute-nvidia-vgpu.charm
 
 relations:
   - - 'ceph-osd:mon'
