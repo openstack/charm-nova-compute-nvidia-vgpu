@@ -1,0 +1,12 @@
+type: charm
+
+parts:
+  charm:
+    build-packages:
+      - git
+
+bases:
+  - name: ubuntu
+    channel: "20.04"
+    architectures:
+      - amd64

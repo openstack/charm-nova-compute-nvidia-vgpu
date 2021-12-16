@@ -1,5 +1,8 @@
 ops
-git+https://opendev.org/openstack/charm-ops-openstack#egg=ops_openstack
+
+# NOTE(lourot): spurious TLS verification issues from opendev.org, switching to
+# github.com for now:
+git+https://github.com/openstack/charm-ops-openstack#egg=ops_openstack
 
 ruamel.yaml
 pylspci

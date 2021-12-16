@@ -1,5 +1,7 @@
-# NOTE(lourot): versions newer than 1.0.0 fail as described in
-# https://github.com/canonical/charmcraft/pull/487#issuecomment-894529408
-git+https://github.com/canonical/charmcraft.git@1.0.0#egg=charmcraft
+# NOTES(lourot):
+# * We don't install charmcraft via pip anymore because it anyway spins up a
+#   container and scp the system's charmcraft snap inside it. So the charmcraft
+#   snap is necessary on the system anyway.
+# * `tox -e build` successfully validated with charmcraft 1.2.1
 
 cffi==1.14.6; python_version < '3.6'  # cffi 1.15.0 drops support for py35.
