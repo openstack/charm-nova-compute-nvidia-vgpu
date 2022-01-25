@@ -8,7 +8,6 @@
         - jammy-yoga-nvidia-vgpu:
             voting: false
         - impish-xena-nvidia-vgpu
-        - hirsute-wallaby-nvidia-vgpu
         - focal-yoga-nvidia-vgpu
         - focal-xena-nvidia-vgpu
         - focal-wallaby-nvidia-vgpu
@@ -34,13 +33,6 @@
     dependencies: *smoke-jobs
     vars:
       tox_extra_args: impish-xena
-- job:
-    name: hirsute-wallaby-nvidia-vgpu
-    description: Run a functional test against hirsute-wallaby
-    parent: func-target
-    dependencies: *smoke-jobs
-    vars:
-      tox_extra_args: hirsute-wallaby
 - job:
     name: focal-yoga-nvidia-vgpu
     description: Run a functional test against focal-yoga

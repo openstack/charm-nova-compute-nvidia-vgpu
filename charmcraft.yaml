@@ -2,6 +2,11 @@ type: charm
 
 parts:
   charm:
+    charm-python-packages:
+      # NOTE(lourot: see
+      # * https://github.com/canonical/charmcraft/issues/551
+      # * https://github.com/canonical/charmcraft/issues/632
+      - setuptools < 58
     build-packages:
       - git
 

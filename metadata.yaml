@@ -9,7 +9,6 @@ tags:
 - openstack
 series:
 - focal
-- hirsute
 - impish
 subordinate: true
 provides:
