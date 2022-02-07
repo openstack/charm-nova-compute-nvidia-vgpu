@@ -1,14 +1,6 @@
 ops
 
-# NOTE(lourot): spurious TLS verification issues from opendev.org, switching to
-# github.com for now:
-git+https://github.com/openstack/charm-ops-openstack#egg=ops_openstack
+git+https://opendev.org/openstack/charm-ops-openstack#egg=ops_openstack
 
 ruamel.yaml
-
-# NOTE(lourot): we can't use `pylspci` from PyPI here as charmcraft will then
-# attempt a `pip install --no-binary :all: pylspci` and hit
-# https://gitlab.com/Lucidiot/pylspci/-/issues/21 . Pulling from source
-# instead. Also using a fork on GitHub because of not being able to access
-# GitLab behind a proxy:
-git+https://github.com/openstack-charmers/pylspci
+pylspci
