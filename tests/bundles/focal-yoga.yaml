@@ -269,5 +269,5 @@ relations:
   - - 'placement:placement'
     - 'nova-cloud-controller:placement'
 
-  - - 'nova-compute'
-    - 'nova-compute-nvidia-vgpu'
+  - - 'nova-compute:nova-vgpu'
+    - 'nova-compute-nvidia-vgpu:nova-vgpu'

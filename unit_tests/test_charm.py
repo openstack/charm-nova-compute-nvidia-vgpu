@@ -14,7 +14,7 @@
 
 import unittest
 
-from mock import MagicMock, patch
+from mock import ANY, MagicMock, patch
 
 from ops.model import ActiveStatus
 from ops.testing import Harness
@@ -56,6 +56,7 @@ class TestNovaComputeNvidiaVgpuCharm(CharmTestCase):
 
     _PATCHES = [
         'SimpleParser',
+        '_set_relation_data',
     ]
 
     _PCI_DEVICES_LIST_WITHOUT_GPU = [
@@ -105,3 +106,19 @@ class TestNovaComputeNvidiaVgpuCharm(CharmTestCase):
         self.harness.charm.on.start.emit()
         self.assertTrue(isinstance(
             self.harness.model.unit.status, ActiveStatus))
+
+    def test_nova_vgpu_relation_joined(self):
+        self.harness.set_leader(True)
+        self.harness.update_config({
+            "vgpu-device-mappings": "{'vgpu_type1': ['device_address1']}"
+        })
+        relation_id = self.harness.add_relation('nova-vgpu', 'nova-compute')
+        self.harness.add_relation_unit(relation_id, 'nova-compute/0')
+
+        # Verify that nova-compute-vgpu-charm sets relation data to its
+        # principle nova-compute.
+        # NOTE(lourot): We mock _set_relation_data() instead of using
+        # self.harness.get_relation_data() as a workaround for
+        # https://github.com/canonical/operator/issues/703
+        self._set_relation_data.assert_called_once_with(
+            ANY, 'subordinate_configuration', ANY)

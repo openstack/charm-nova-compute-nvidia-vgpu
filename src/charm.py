@@ -16,6 +16,7 @@
 
 
 import logging
+import json
 
 from charmhelpers.core.hookenv import cached
 from charmhelpers.core.host import file_hash
@@ -51,6 +52,10 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.start, self._on_start)
+        self.framework.observe(self.on.nova_vgpu_relation_joined,
+                               self._on_nova_vgpu_relation_joined_or_changed)
+        self.framework.observe(self.on.nova_vgpu_relation_changed,
+                               self._on_nova_vgpu_relation_joined_or_changed)
 
         # hash of the last successfully installed NVIDIA vGPU software passed
         # as resource to the charm:
@@ -62,11 +67,8 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         # version has just been provided as a charm resource.
         self._install_nvidia_software_if_needed()
 
-        vgpu_device_mappings_str = self.config.get('vgpu-device-mappings')
-        if vgpu_device_mappings_str is not None:
-            vgpu_device_mappings = YAML().load(vgpu_device_mappings_str)
-            logging.debug('vgpu-device-mappings={}'.format(
-                vgpu_device_mappings))
+        for relation in self.framework.model.relations.get('nova-vgpu'):
+            self._set_principal_unit_relation_data(relation.data[self.unit])
 
         self.update_status()
 
@@ -82,6 +84,10 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         self._stored.is_started = True
 
         self.update_status()
+
+    def _on_nova_vgpu_relation_joined_or_changed(self, event):
+        self._set_principal_unit_relation_data(
+            event.relation.data[self.unit])
 
     def services(self):
         # If no NVIDIA software is expected to be installed on this particular
@@ -112,6 +118,34 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
             return BlockedStatus(unit_status_msg)
 
         return ActiveStatus('Unit is ready: ' + unit_status_msg)
+
+    def _set_principal_unit_relation_data(self, principal_unit_relation_data):
+        """Pass configuration to a principal unit."""
+        vgpu_device_mappings_str = self.config.get('vgpu-device-mappings')
+        if vgpu_device_mappings_str is not None:
+            vgpu_device_mappings = YAML().load(vgpu_device_mappings_str)
+            logging.debug('vgpu-device-mappings={}'.format(
+                vgpu_device_mappings))
+
+            nova_conf = json.dumps({
+                'nova': {
+                    '/etc/nova/nova.conf': {
+                        'sections': {
+                            'DEFAULT': [
+                                # NOTE(lourot): will be implemented in next
+                                # iteration:
+                                # ('key', 'value')
+                            ]
+                        }
+                    }
+                }
+            })
+            _set_relation_data(
+                principal_unit_relation_data, 'subordinate_configuration',
+                nova_conf)
+            logging.debug(
+                'relation data to principal unit set to '
+                'subordinate_configuration={}'.format(nova_conf))
 
     def _install_nvidia_software_if_needed(self):
         """Install the NVIDIA software on this unit if relevant."""
@@ -206,6 +240,16 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
             logging.debug('No NVIDIA GPU found.')
 
         return nvidia_gpu_hardware_found
+
+
+def _set_relation_data(relation_data, key, value):
+    """Mockable setter.
+
+    Workaround for https://github.com/canonical/operator/issues/703
+    Used in unit test
+    TestNovaComputeNvidiaVgpuCharm.test_nova_vgpu_relation_joined
+    """
+    relation_data[key] = value
 
 
 if __name__ == '__main__':

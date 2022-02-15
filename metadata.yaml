@@ -12,8 +12,8 @@ series:
 - impish
 subordinate: true
 provides:
-  nova-compute-subordinate:
-    interface: nova-compute-subordinate
+  nova-vgpu:
+    interface: nova-vgpu
     scope: container
 requires:
   juju-info:
