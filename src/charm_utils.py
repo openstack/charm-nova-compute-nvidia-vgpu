@@ -16,7 +16,14 @@
 
 
 import logging
+import json
 
+from ruamel.yaml import YAML
+
+from charmhelpers.contrib.openstack.utils import (
+    CompareOpenStackReleases,
+    get_os_codename_package,
+)
 from charmhelpers.core.hookenv import cached
 from charmhelpers.core.host import file_hash
 from charmhelpers.fetch import apt_install
@@ -28,6 +35,12 @@ from ops.model import (
 )
 
 import nvidia_utils
+
+
+class UnsupportedOpenStackRelease(Exception):
+    def __init__(self, release_name):
+        super().__init__("Unsupported OpenStack release '{}'".format(
+            release_name))
 
 
 @cached
@@ -106,17 +119,31 @@ def check_status(config):
     return ActiveStatus('Unit is ready: ' + unit_status_msg)
 
 
-def set_relation_data(relation_data, key, value):
-    """Mockable setter.
+def set_principal_unit_relation_data(relation_data_to_be_set, config):
+    """Pass configuration to a principal unit.
 
-    Workaround for https://github.com/canonical/operator/issues/703
-    Used in unit test
-    TestNovaComputeNvidiaVgpuCharm.test_nova_vgpu_relation_joined
-
-    :param relation_data: Relation data bag.
-    :type relation_data: ops.model.RelationData
+    :param relation_data_to_be_set: Relation data bag to principal unit.
+    :type relation_data_to_be_set: ops.model.RelationData
+    :param config: Juju application config.
+    :type config: ops.model.ConfigData
+    :raises: UnsupportedOpenStackRelease
     """
-    relation_data[key] = value
+    vgpu_device_mappings_str = config.get('vgpu-device-mappings')
+    if vgpu_device_mappings_str is not None:
+        vgpu_device_mappings = YAML().load(vgpu_device_mappings_str)
+        logging.debug('vgpu-device-mappings={}'.format(vgpu_device_mappings))
+
+        nova_conf = json.dumps({
+            'nova': {
+                '/etc/nova/nova.conf': {
+                    'sections': _nova_conf_sections(vgpu_device_mappings)
+                }
+            }
+        })
+        relation_data_to_be_set['subordinate_configuration'] = nova_conf
+        logging.debug(
+            'relation data to principal unit set to '
+            'subordinate_configuration={}'.format(nova_conf))
 
 
 def _path_and_hash_nvidia_resource(resources):
@@ -134,3 +161,56 @@ def _path_and_hash_nvidia_resource(resources):
         return None, None
 
     return nvidia_vgpu_software_path, file_hash(nvidia_vgpu_software_path)
+
+
+def _nova_conf_sections(vgpu_device_mappings):
+    """Get OpenStack release specific nova.conf sections.
+
+    :param vgpu_device_mappings: vGPU-related settings to be turned into Nova
+                                 config bits.
+    :type vgpu_device_mappings: Dict[str, List[str]]
+    :returns: Dictionary of section names and lists of key/value pairs.
+    :rtype: Dict[str, List[Tuple[str, any]]]
+    :raises: UnsupportedOpenStackRelease
+    """
+    current_release_name = get_os_codename_package('nova-common', fatal=False)
+    if current_release_name is None:
+        current_release_name = 'xena'
+        logging.info("Couldn't determine current OpenStack release, "
+                     "defaulting to {} for now".format(current_release_name))
+    current_release = CompareOpenStackReleases(current_release_name)
+
+    if current_release >= 'xena':
+        # https://docs.openstack.org/releasenotes/nova/xena.html#deprecation-notes
+        result = {
+            'devices': [
+                ('enabled_mdev_types', ', '.join(vgpu_device_mappings.keys()))
+            ]
+        }
+        for vgpu_type, pci_addresses in vgpu_device_mappings.items():
+            result['mdev_{}'.format(vgpu_type)] = [('device_addresses',
+                                                    ','.join(pci_addresses))]
+        return result
+
+    if current_release >= 'ussuri':
+        # https://docs.openstack.org/nova/ussuri/admin/virtual-gpu.html
+        result = {
+            'devices': [
+                ('enabled_vgpu_types', ', '.join(vgpu_device_mappings.keys()))
+            ]
+        }
+        for vgpu_type, pci_addresses in vgpu_device_mappings.items():
+            result['vgpu_{}'.format(vgpu_type)] = [('device_addresses',
+                                                    ','.join(pci_addresses))]
+        return result
+
+    if current_release >= 'queens':
+        # https://docs.openstack.org/nova/queens/admin/virtual-gpu.html
+        result = {
+            'devices': [
+                ('enabled_vgpu_types', ', '.join(vgpu_device_mappings.keys()))
+            ]
+        }
+        return result
+
+    raise UnsupportedOpenStackRelease(current_release_name)

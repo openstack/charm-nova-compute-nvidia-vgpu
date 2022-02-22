@@ -185,6 +185,8 @@ applications:
 
   nova-compute-nvidia-vgpu:
     charm: ../../nova-compute-nvidia-vgpu.charm
+    options:
+      vgpu-device-mappings: "{'nvidia-108': ['0000:c1:00.0']}"
 
 relations:
   - - 'ceph-osd:mon'

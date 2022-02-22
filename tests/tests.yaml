@@ -24,6 +24,7 @@ configure:
 
 tests:
   - zaza.openstack.charm_tests.nova.tests.LTSGuestCreateTest
+  - zaza.openstack.charm_tests.nova.tests.NovaComputeNvidiaVgpuTest
 
 tests_options:
   force_deploy:

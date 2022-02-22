@@ -15,20 +15,15 @@
 # limitations under the License.
 
 
-import logging
-import json
-
 import ops_openstack.plugins.classes
 
 from ops.main import main
-
-from ruamel.yaml import YAML
 
 from charm_utils import (
     check_status,
     install_nvidia_software_if_needed,
     is_nvidia_software_to_be_installed,
-    set_relation_data,
+    set_principal_unit_relation_data,
 )
 
 
@@ -63,7 +58,8 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
                                           self.framework.model.resources)
 
         for relation in self.framework.model.relations.get('nova-vgpu'):
-            self._set_principal_unit_relation_data(relation.data[self.unit])
+            set_principal_unit_relation_data(relation.data[self.unit],
+                                             self.config)
 
         self.update_status()
 
@@ -82,8 +78,8 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         self.update_status()
 
     def _on_nova_vgpu_relation_joined_or_changed(self, event):
-        self._set_principal_unit_relation_data(
-            event.relation.data[self.unit])
+        set_principal_unit_relation_data(event.relation.data[self.unit],
+                                         self.config)
 
     def services(self):
         # If no NVIDIA software is expected to be installed on this particular
@@ -100,39 +96,6 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         :rtype: ops.model.StatusBase
         """
         return check_status(self.config)
-
-    def _set_principal_unit_relation_data(self, principal_unit_relation_data):
-        """Pass configuration to a principal unit.
-
-        :param principal_unit_relation_data: Relation data bag to principal
-                                             unit.
-        :type principal_unit_relation_data: ops.model.RelationData
-        """
-        vgpu_device_mappings_str = self.config.get('vgpu-device-mappings')
-        if vgpu_device_mappings_str is not None:
-            vgpu_device_mappings = YAML().load(vgpu_device_mappings_str)
-            logging.debug('vgpu-device-mappings={}'.format(
-                vgpu_device_mappings))
-
-            nova_conf = json.dumps({
-                'nova': {
-                    '/etc/nova/nova.conf': {
-                        'sections': {
-                            'DEFAULT': [
-                                # NOTE(lourot): will be implemented in next
-                                # iteration:
-                                # ('key', 'value')
-                            ]
-                        }
-                    }
-                }
-            })
-            set_relation_data(
-                principal_unit_relation_data, 'subordinate_configuration',
-                nova_conf)
-            logging.debug(
-                'relation data to principal unit set to '
-                'subordinate_configuration={}'.format(nova_conf))
 
 
 if __name__ == '__main__':

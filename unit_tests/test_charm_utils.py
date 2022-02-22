@@ -116,6 +116,21 @@ class TestCharmUtils(unittest.TestCase):
                 'Unit is ready: '
                 'NVIDIA GPU found; no NVIDIA software installed'))
 
+    @patch('charm_utils.get_os_codename_package')
+    def test_set_principal_unit_relation_data(self, release_codename_mock):
+        release_codename_mock.return_value = 'xena'
+        relation_data_to_be_set = {}
+        charm_config = {
+            'vgpu-device-mappings': "{'nvidia-35': ['0000:84:00.0']}"
+        }
+
+        charm_utils.set_principal_unit_relation_data(relation_data_to_be_set,
+                                                     charm_config)
+
+        self.assertIn(
+            '0000:84:00.0',
+            relation_data_to_be_set['subordinate_configuration'])
+
     @patch('charm_utils.file_hash')
     def test_path_and_hash_nvidia_resource(self, file_hash_mock):
         file_hash_mock.return_value = 'nvidia-software-hash'
@@ -124,3 +139,62 @@ class TestCharmUtils(unittest.TestCase):
 
         self.assertEqual(charm_utils._path_and_hash_nvidia_resource(resources),
                          ('nvidia-software-path', 'nvidia-software-hash'))
+
+    @patch('charm_utils.get_os_codename_package')
+    def test_nova_conf_sections(self, release_codename_mock):
+        vgpu_device_mappings = {
+            'nvidia-35': ['0000:84:00.0', '0000:85:00.0'],
+            'nvidia-36': ['0000:86:00.0'],
+        }
+
+        expected_queens_nova_conf_sections = {
+            'devices': [
+                ('enabled_vgpu_types', 'nvidia-35, nvidia-36'),
+            ],
+        }
+        expected_ussuri_nova_conf_sections = {
+            'devices': [
+                ('enabled_vgpu_types', 'nvidia-35, nvidia-36'),
+            ],
+            'vgpu_nvidia-35': [
+                ('device_addresses', '0000:84:00.0,0000:85:00.0'),
+            ],
+            'vgpu_nvidia-36': [
+                ('device_addresses', '0000:86:00.0'),
+            ],
+        }
+        expected_xena_nova_conf_sections = {
+            'devices': [
+                ('enabled_mdev_types', 'nvidia-35, nvidia-36'),
+            ],
+            'mdev_nvidia-35': [
+                ('device_addresses', '0000:84:00.0,0000:85:00.0'),
+            ],
+            'mdev_nvidia-36': [
+                ('device_addresses', '0000:86:00.0'),
+            ],
+        }
+
+        release_codename_mock.return_value = 'xena'
+        self.assertEqual(charm_utils._nova_conf_sections(vgpu_device_mappings),
+                         expected_xena_nova_conf_sections)
+
+        release_codename_mock.return_value = None
+        self.assertEqual(charm_utils._nova_conf_sections(vgpu_device_mappings),
+                         expected_xena_nova_conf_sections)
+
+        release_codename_mock.return_value = 'ussuri'
+        self.assertEqual(charm_utils._nova_conf_sections(vgpu_device_mappings),
+                         expected_ussuri_nova_conf_sections)
+
+        release_codename_mock.return_value = 'wallaby'
+        self.assertEqual(charm_utils._nova_conf_sections(vgpu_device_mappings),
+                         expected_ussuri_nova_conf_sections)
+
+        release_codename_mock.return_value = 'queens'
+        self.assertEqual(charm_utils._nova_conf_sections(vgpu_device_mappings),
+                         expected_queens_nova_conf_sections)
+
+        with self.assertRaises(charm_utils.UnsupportedOpenStackRelease):
+            release_codename_mock.return_value = 'pike'
+            charm_utils._nova_conf_sections(vgpu_device_mappings)

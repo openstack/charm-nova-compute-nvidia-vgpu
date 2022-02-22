@@ -10,7 +10,6 @@ Run the smoke tests with:
 ```bash
 cd ../
 tox -e build
-cd tests/
 tox -e func-smoke
 ```
 

@@ -15,7 +15,7 @@
 import sys
 import unittest
 
-from mock import ANY, patch
+from mock import patch
 
 from ops.model import ActiveStatus
 from ops.testing import Harness
@@ -50,7 +50,7 @@ class TestNovaComputeNvidiaVgpuCharm(CharmTestCase):
         'check_status',
         'install_nvidia_software_if_needed',
         'is_nvidia_software_to_be_installed',
-        'set_relation_data',
+        'set_principal_unit_relation_data',
     ]
 
     def setUp(self):
@@ -82,8 +82,4 @@ class TestNovaComputeNvidiaVgpuCharm(CharmTestCase):
 
         # Verify that nova-compute-vgpu-charm sets relation data to its
         # principle nova-compute.
-        # NOTE(lourot): We mock _set_relation_data() instead of using
-        # self.harness.get_relation_data() as a workaround for
-        # https://github.com/canonical/operator/issues/703
-        self.set_relation_data.assert_called_once_with(
-            ANY, 'subordinate_configuration', ANY)
+        self.assertTrue(self.set_principal_unit_relation_data.called)
