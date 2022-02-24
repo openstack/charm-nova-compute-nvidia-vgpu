@@ -123,13 +123,17 @@ class TestCharmUtils(unittest.TestCase):
         charm_config = {
             'vgpu-device-mappings': "{'nvidia-35': ['0000:84:00.0']}"
         }
+        charm_services = ['nvidia-vgpu-mgr']
 
-        charm_utils.set_principal_unit_relation_data(relation_data_to_be_set,
-                                                     charm_config)
+        charm_utils.set_principal_unit_relation_data(
+            relation_data_to_be_set, charm_config, charm_services)
 
         self.assertIn(
             '0000:84:00.0',
             relation_data_to_be_set['subordinate_configuration'])
+        self.assertIn(
+            'nvidia-vgpu-mgr',
+            relation_data_to_be_set['services'])
 
     @patch('charm_utils.file_hash')
     def test_path_and_hash_nvidia_resource(self, file_hash_mock):

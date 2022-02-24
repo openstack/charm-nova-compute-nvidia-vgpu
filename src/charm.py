@@ -59,7 +59,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
         for relation in self.framework.model.relations.get('nova-vgpu'):
             set_principal_unit_relation_data(relation.data[self.unit],
-                                             self.config)
+                                             self.config, self.services())
 
         self.update_status()
 
@@ -79,7 +79,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
     def _on_nova_vgpu_relation_joined_or_changed(self, event):
         set_principal_unit_relation_data(event.relation.data[self.unit],
-                                         self.config)
+                                         self.config, self.services())
 
     def services(self):
         # If no NVIDIA software is expected to be installed on this particular

@@ -119,13 +119,16 @@ def check_status(config):
     return ActiveStatus('Unit is ready: ' + unit_status_msg)
 
 
-def set_principal_unit_relation_data(relation_data_to_be_set, config):
+def set_principal_unit_relation_data(relation_data_to_be_set, config,
+                                     services):
     """Pass configuration to a principal unit.
 
     :param relation_data_to_be_set: Relation data bag to principal unit.
     :type relation_data_to_be_set: ops.model.RelationData
     :param config: Juju application config.
     :type config: ops.model.ConfigData
+    :param services: List of services managed by this unit.
+    :type services: List[str]
     :raises: UnsupportedOpenStackRelease
     """
     vgpu_device_mappings_str = config.get('vgpu-device-mappings')
@@ -144,6 +147,8 @@ def set_principal_unit_relation_data(relation_data_to_be_set, config):
         logging.debug(
             'relation data to principal unit set to '
             'subordinate_configuration={}'.format(nova_conf))
+
+        relation_data_to_be_set['services'] = json.dumps(services)
 
 
 def _path_and_hash_nvidia_resource(resources):
