@@ -149,6 +149,8 @@ def set_principal_unit_relation_data(relation_data_to_be_set, config,
             'subordinate_configuration={}'.format(nova_conf))
 
         relation_data_to_be_set['services'] = json.dumps(services)
+        relation_data_to_be_set['releases-packages-map'] = json.dumps(
+            _releases_packages_map(), sort_keys=True)
 
 
 def _path_and_hash_nvidia_resource(resources):
@@ -178,11 +180,7 @@ def _nova_conf_sections(vgpu_device_mappings):
     :rtype: Dict[str, List[Tuple[str, any]]]
     :raises: UnsupportedOpenStackRelease
     """
-    current_release_name = get_os_codename_package('nova-common', fatal=False)
-    if current_release_name is None:
-        current_release_name = 'xena'
-        logging.info("Couldn't determine current OpenStack release, "
-                     "defaulting to {} for now".format(current_release_name))
+    current_release_name = _get_current_release()
     current_release = CompareOpenStackReleases(current_release_name)
 
     if current_release >= 'xena':
@@ -219,3 +217,42 @@ def _nova_conf_sections(vgpu_device_mappings):
         return result
 
     raise UnsupportedOpenStackRelease(current_release_name)
+
+
+def _releases_packages_map():
+    '''Provide a map of all supported releases and their packages.
+
+    NOTE(lourot): this is a simplified version of a more generic
+    implementation:
+    https://github.com/openstack/charms.openstack/blob/master/charms_openstack/charm/core.py
+
+    :returns: Map of release, package type and install / purge packages.
+        Example:
+        {
+            'mitaka': {
+                'deb': {
+                    'install': ['python-ldappool'],
+                    'purge': []
+                }
+            },
+            'rocky': {
+                'deb': {
+                    'install': ['python3-ldap', 'python3-ldappool'],
+                    'purge': ['python-ldap', 'python-ldappool']}
+            }
+        }
+    :rtype: Dict[str,Dict[str,List[str]]]
+    '''
+    return {
+        _get_current_release(): {
+            'deb': {
+                'install': (
+                    nvidia_utils.installed_nvidia_software_package_names()),
+                'purge': [],
+            }
+        }
+    }
+
+
+def _get_current_release():
+    return get_os_codename_package('nova-common', fatal=False) or 'queens'

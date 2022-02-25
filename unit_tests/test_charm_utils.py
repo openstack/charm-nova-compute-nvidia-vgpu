@@ -116,9 +116,17 @@ class TestCharmUtils(unittest.TestCase):
                 'Unit is ready: '
                 'NVIDIA GPU found; no NVIDIA software installed'))
 
+    @patch('nvidia_utils._installed_nvidia_software_packages')
     @patch('charm_utils.get_os_codename_package')
-    def test_set_principal_unit_relation_data(self, release_codename_mock):
+    def test_set_principal_unit_relation_data(self, release_codename_mock,
+                                              installed_packages_mock):
         release_codename_mock.return_value = 'xena'
+        installed_packages_mock.return_value = [{
+            'name': 'nvidia-vgpu-ubuntu-470',
+            'version': '470.68',
+            'architecture': 'amd64',
+            'description': 'NVIDIA vGPU driver - version 470.68'
+        }]
         relation_data_to_be_set = {}
         charm_config = {
             'vgpu-device-mappings': "{'nvidia-35': ['0000:84:00.0']}"
@@ -134,6 +142,9 @@ class TestCharmUtils(unittest.TestCase):
         self.assertIn(
             'nvidia-vgpu-mgr',
             relation_data_to_be_set['services'])
+        self.assertIn(
+            'nvidia-vgpu-ubuntu-470',
+            relation_data_to_be_set['releases-packages-map'])
 
     @patch('charm_utils.file_hash')
     def test_path_and_hash_nvidia_resource(self, file_hash_mock):
@@ -185,7 +196,7 @@ class TestCharmUtils(unittest.TestCase):
 
         release_codename_mock.return_value = None
         self.assertEqual(charm_utils._nova_conf_sections(vgpu_device_mappings),
-                         expected_xena_nova_conf_sections)
+                         expected_queens_nova_conf_sections)
 
         release_codename_mock.return_value = 'ussuri'
         self.assertEqual(charm_utils._nova_conf_sections(vgpu_device_mappings),

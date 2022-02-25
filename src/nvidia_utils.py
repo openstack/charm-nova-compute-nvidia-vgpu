@@ -32,7 +32,17 @@ def installed_nvidia_software_versions():
     :rtype: List[str]
     """
     return [package['version'] for package in
-            apt_cache().dpkg_list(['nvidia-vgpu-ubuntu-*']).values()]
+            _installed_nvidia_software_packages()]
+
+
+def installed_nvidia_software_package_names():
+    """Get a list of installed NVIDIA vGPU software package names.
+
+    :returns: List of versions
+    :rtype: List[str]
+    """
+    return [package['name'] for package in
+            _installed_nvidia_software_packages()]
 
 
 @cached
@@ -67,3 +77,12 @@ def _has_nvidia_gpu_hardware_notcached():
         logging.debug('No NVIDIA GPU found.')
 
     return nvidia_gpu_hardware_found
+
+
+def _installed_nvidia_software_packages():
+    """Get a list of installed NVIDIA vGPU software packages.
+
+    :returns: List of packages
+    :rtype: List[Dict[str, str]]
+    """
+    return apt_cache().dpkg_list(['nvidia-vgpu-ubuntu-*']).values()
