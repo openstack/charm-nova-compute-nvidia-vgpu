@@ -24,15 +24,6 @@ machines:
   '9':
   '10':
     constraints: mem=4096M cores=4
-  '11':
-  '12':
-  '13':
-  '14':
-  '15':
-  '16':
-  '17':
-  '18':
-  '19':
 
 applications:
 
@@ -62,34 +53,6 @@ applications:
       - '1'
       - '2'
     channel: latest/edge
-
-  ceph-osd:
-    charm: ch:ceph-osd
-    num_units: 6
-    storage:
-      osd-devices: '10G'
-    options:
-      source: *openstack-origin
-    to:
-      - '11'
-      - '12'
-      - '13'
-      - '14'
-      - '15'
-      - '16'
-    channel: quincy/edge
-
-  ceph-mon:
-    charm: ch:ceph-mon
-    num_units: 3
-    options:
-      source: *openstack-origin
-      monitor-count: '3'
-    to:
-      - '17'
-      - '18'
-      - '19'
-    channel: quincy/edge
 
   rabbitmq-server:
     charm: ch:rabbitmq-server
@@ -175,10 +138,6 @@ applications:
       enable-live-migration: false
       aa-profile-mode: enforce
       debug: true
-      pool-type: erasure-coded
-      ec-profile-k: 4
-      ec-profile-m: 2
-      libvirt-image-backend: rbd
     to:
       - '10'
     channel: yoga/edge
@@ -189,12 +148,6 @@ applications:
       vgpu-device-mappings: "{'nvidia-108': ['0000:c1:00.0']}"
 
 relations:
-  - - 'ceph-osd:mon'
-    - 'ceph-mon:osd'
-
-  - - 'nova-compute:ceph'
-    - 'ceph-mon:client'
-
   - - 'nova-compute:image-service'
     - 'glance:image-service'
 
