@@ -23,6 +23,7 @@ from ruamel.yaml import YAML
 from charmhelpers.contrib.openstack.utils import (
     CompareOpenStackReleases,
     get_os_codename_package,
+    ows_check_services_running,
 )
 from charmhelpers.core.hookenv import cached
 from charmhelpers.core.host import file_hash
@@ -95,25 +96,40 @@ def install_nvidia_software_if_needed(stored, config, resources):
         stored.last_installed_resource_hash = nvidia_software_hash
 
 
-def check_status(config):
+def check_status(config, services):
     """Determine the unit status to be set.
 
     :param config: Juju application config.
     :type config: ops.model.ConfigData
+    :param services: List of services expected to be running.
+    :type services: List[str]
     :rtype: ops.model.StatusBase
     """
     unit_status_msg = ('no ' if not nvidia_utils.has_nvidia_gpu_hardware()
                        else '') + 'NVIDIA GPU found; '
 
     installed_versions = nvidia_utils.installed_nvidia_software_versions()
-    if len(installed_versions) > 0:
+    software_is_installed = len(installed_versions) > 0
+
+    _, services_not_running_msg = ows_check_services_running(services,
+                                                             ports=[])
+    software_is_running = services_not_running_msg is None
+
+    if software_is_installed:
         unit_status_msg += 'installed NVIDIA software: '
         unit_status_msg += ', '.join(installed_versions)
+        if not software_is_running:
+            # NOTE(lourot): the exact list of services not running that should
+            # be will be displayed in the principal's blocked status message
+            # already, so no need to repeat it here on the subordinate.
+            unit_status_msg += '; reboot required?'
     else:
         unit_status_msg += 'no NVIDIA software installed'
 
-    if (is_nvidia_software_to_be_installed(config) and
-            len(installed_versions) == 0):
+    if ((is_nvidia_software_to_be_installed(config) and
+         not software_is_installed) or
+        (software_is_installed and
+         not software_is_running)):
         return BlockedStatus(unit_status_msg)
 
     return ActiveStatus('Unit is ready: ' + unit_status_msg)

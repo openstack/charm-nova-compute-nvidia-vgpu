@@ -76,16 +76,19 @@ class TestCharmUtils(unittest.TestCase):
         apt_install_mock.assert_called_once_with(['path-to-software'],
                                                  fatal=True)
 
+    @patch('charm_utils.ows_check_services_running')
     @patch('charm_utils.is_nvidia_software_to_be_installed')
     @patch('nvidia_utils.installed_nvidia_software_versions')
     @patch('nvidia_utils.has_nvidia_gpu_hardware')
-    def test_check_status(self, has_hw_mock, installed_sw_mock,
-                          is_sw_to_be_installed_mock):
+    def test_check_status(
+            self, has_hw_mock, installed_sw_mock, is_sw_to_be_installed_mock,
+            check_services_running_mock):
         has_hw_mock.return_value = True
         installed_sw_mock.return_value = ['42', '43']
         is_sw_to_be_installed_mock.return_value = True
+        check_services_running_mock.return_value = (None, None)
         self.assertEqual(
-            charm_utils.check_status(None),
+            charm_utils.check_status(None, None),
             ActiveStatus(
                 'Unit is ready: '
                 'NVIDIA GPU found; installed NVIDIA software: 42, 43'))
@@ -93,8 +96,9 @@ class TestCharmUtils(unittest.TestCase):
         has_hw_mock.return_value = False
         installed_sw_mock.return_value = ['42', '43']
         is_sw_to_be_installed_mock.return_value = True
+        check_services_running_mock.return_value = (None, None)
         self.assertEqual(
-            charm_utils.check_status(None),
+            charm_utils.check_status(None, None),
             ActiveStatus(
                 'Unit is ready: '
                 'no NVIDIA GPU found; installed NVIDIA software: 42, 43'))
@@ -102,19 +106,32 @@ class TestCharmUtils(unittest.TestCase):
         has_hw_mock.return_value = True
         installed_sw_mock.return_value = []
         is_sw_to_be_installed_mock.return_value = True
+        check_services_running_mock.return_value = (None, None)
         self.assertEqual(
-            charm_utils.check_status(None),
+            charm_utils.check_status(None, None),
             BlockedStatus(
                 'NVIDIA GPU found; no NVIDIA software installed'))
 
         has_hw_mock.return_value = True
         installed_sw_mock.return_value = []
         is_sw_to_be_installed_mock.return_value = False
+        check_services_running_mock.return_value = (None, None)
         self.assertEqual(
-            charm_utils.check_status(None),
+            charm_utils.check_status(None, None),
             ActiveStatus(
                 'Unit is ready: '
                 'NVIDIA GPU found; no NVIDIA software installed'))
+
+        has_hw_mock.return_value = True
+        installed_sw_mock.return_value = ['42', '43']
+        is_sw_to_be_installed_mock.return_value = True
+        check_services_running_mock.return_value = (
+            None, 'Services not running that should be: nvidia-vgpu-mgr')
+        self.assertEqual(
+            charm_utils.check_status(None, None),
+            BlockedStatus(
+                'NVIDIA GPU found; installed NVIDIA software: 42, 43; '
+                'reboot required?'))
 
     @patch('nvidia_utils._installed_nvidia_software_packages')
     @patch('charm_utils.get_os_codename_package')

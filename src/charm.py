@@ -82,6 +82,10 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
                                          self.config, self.services())
 
     def services(self):
+        """Determine the list of services that should be running.
+
+        :rtype: List[str]
+        """
         # If no NVIDIA software is expected to be installed on this particular
         # unit, then no service should be expected to run by
         # OSBaseCharm.update_status(). Otherwise the services from the
@@ -95,7 +99,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
         :rtype: ops.model.StatusBase
         """
-        return check_status(self.config)
+        return check_status(self.config, self.services())
 
 
 if __name__ == '__main__':

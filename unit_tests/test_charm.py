@@ -81,5 +81,5 @@ class TestNovaComputeNvidiaVgpuCharm(CharmTestCase):
         self.harness.add_relation_unit(relation_id, 'nova-compute/0')
 
         # Verify that nova-compute-vgpu-charm sets relation data to its
-        # principle nova-compute.
+        # principal nova-compute.
         self.assertTrue(self.set_principal_unit_relation_data.called)
