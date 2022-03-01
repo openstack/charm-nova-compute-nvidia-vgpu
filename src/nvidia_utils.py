@@ -16,8 +16,11 @@
 
 
 import logging
+import os
 
 from charmhelpers.core.hookenv import cached
+from charmhelpers.core.kernel import update_initramfs
+from charmhelpers.core.templating import render
 from charmhelpers.fetch import (
     apt_cache,
 )
@@ -43,6 +46,17 @@ def installed_nvidia_software_package_names():
     """
     return [package['name'] for package in
             _installed_nvidia_software_packages()]
+
+
+def disable_nouveau_driver():
+    """Disable the nouveau driver.
+
+    This driver prevents the nvidia-vgpu-mgr service from starting. A reboot is
+    required.
+    """
+    config_file = '/etc/modprobe.d/disable-nouveau.conf'
+    render(os.path.basename(config_file), config_file, {})
+    update_initramfs()
 
 
 @cached

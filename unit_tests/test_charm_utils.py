@@ -15,7 +15,7 @@
 import sys
 import unittest
 
-from mock import MagicMock, patch
+from mock import ANY, MagicMock, patch
 
 sys.path.append('src')  # noqa
 
@@ -45,12 +45,14 @@ class TestCharmUtils(unittest.TestCase):
             charm_utils.is_nvidia_software_to_be_installed_notcached({
                 'force-install-nvidia-vgpu': False}))
 
+    @patch('nvidia_utils.update_initramfs')
+    @patch('nvidia_utils.render')
     @patch('charm_utils.apt_install')
     @patch('charm_utils._path_and_hash_nvidia_resource')
     @patch('charm_utils.is_nvidia_software_to_be_installed')
     def test_install_nvidia_software_if_needed(
             self, is_software_to_be_installed_mock, path_and_hash_mock,
-            apt_install_mock):
+            apt_install_mock, render_template_mock, update_initramfs_mock):
         is_software_to_be_installed_mock.return_value = True
         unit_stored_state = MagicMock()
         unit_stored_state.last_installed_resource_hash = 'hash-1'
@@ -75,6 +77,9 @@ class TestCharmUtils(unittest.TestCase):
                                                       None)
         apt_install_mock.assert_called_once_with(['path-to-software'],
                                                  fatal=True)
+        render_template_mock.assert_called_once_with(
+            'disable-nouveau.conf', ANY, ANY)
+        update_initramfs_mock.assert_called_once_with()
 
     @patch('charm_utils.ows_check_services_running')
     @patch('charm_utils.is_nvidia_software_to_be_installed')

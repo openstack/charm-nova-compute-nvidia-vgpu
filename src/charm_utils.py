@@ -95,6 +95,11 @@ def install_nvidia_software_if_needed(stored, config, resources):
         apt_install([nvidia_software_path], fatal=True)
         stored.last_installed_resource_hash = nvidia_software_hash
 
+        # The nouveau driver prevents the nvidia-vgpu-mgr service from
+        # starting, thus it needs to be disabled. Unfortunately this requires
+        # a reboot. The operator will be notified via a blocked unit status.
+        nvidia_utils.disable_nouveau_driver()
+
 
 def check_status(config, services):
     """Determine the unit status to be set.
