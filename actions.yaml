@@ -1,0 +1,2 @@
+list-vgpu-types:
+  description: List all vGPU types registered by the NVIDIA driver.

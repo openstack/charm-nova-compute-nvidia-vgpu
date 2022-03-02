@@ -25,6 +25,7 @@ from charm_utils import (
     is_nvidia_software_to_be_installed,
     set_principal_unit_relation_data,
 )
+from nvidia_utils import list_vgpu_types
 
 
 class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
@@ -45,6 +46,9 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
                                self._on_nova_vgpu_relation_joined_or_changed)
         self.framework.observe(self.on.nova_vgpu_relation_changed,
                                self._on_nova_vgpu_relation_joined_or_changed)
+
+        self.framework.observe(self.on.list_vgpu_types_action,
+                               self._list_vgpu_types_action)
 
         # hash of the last successfully installed NVIDIA vGPU software passed
         # as resource to the charm:
@@ -100,6 +104,13 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         :rtype: ops.model.StatusBase
         """
         return check_status(self.config, self.services())
+
+    def _list_vgpu_types_action(self, event):
+        """List all vGPU types registered by the NVIDIA driver.
+
+        :type event: ops.charm.ActionEvent
+        """
+        event.set_results({'output': list_vgpu_types()})
 
 
 if __name__ == '__main__':

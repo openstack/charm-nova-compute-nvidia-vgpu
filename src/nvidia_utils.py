@@ -17,6 +17,7 @@
 
 import logging
 import os
+from pathlib import Path
 
 from charmhelpers.core.hookenv import cached
 from charmhelpers.core.kernel import update_initramfs
@@ -57,6 +58,44 @@ def disable_nouveau_driver():
     config_file = '/etc/modprobe.d/disable-nouveau.conf'
     render(os.path.basename(config_file), config_file, {})
     update_initramfs()
+
+
+def list_vgpu_types():
+    """Human-readable list of all vGPU types registered by the NVIDIA driver.
+
+    :rtype: str
+    """
+    # NOTE(lourot): we are reinventing `mdevctl types` here. Unfortunately
+    # `mdevctl` is not available on Bionic.
+
+    vgpu_types_dirname = 'mdev_supported_types'
+    found_pci_addr_dirs = []
+    for root, dirs, files in os.walk('/sys/devices'):
+        if vgpu_types_dirname in dirs:
+            # At this point root looks like
+            # /sys/devices/pci0000:40/0000:40:03.1/0000:41:00.0
+            found_pci_addr_dirs.append(root)
+
+    output_lines = []
+    for pci_addr_dir in found_pci_addr_dirs:
+        root = os.path.join(pci_addr_dir, vgpu_types_dirname)
+        for vgpu_type in sorted(os.listdir(root)):
+            output_line = vgpu_type
+            output_line += ', ' + os.path.basename(pci_addr_dir)
+            output_line += (
+                ', ' + Path(os.path.join(root, vgpu_type, 'name')
+                            ).read_text().rstrip())
+            output_line += (
+                ', ' + Path(os.path.join(root, vgpu_type, 'description')
+                            ).read_text().rstrip())
+
+            # At this point output_line looks like
+            # nvidia-256, 0000:41:00.0, GRID RTX6000-1Q, num_heads=4,
+            #   frl_config=60, framebuffer=1024M, max_resolution=5120x2880,
+            #   max_instance=24
+            output_lines.append(output_line)
+
+    return '\n'.join(output_lines)
 
 
 @cached
