@@ -13,6 +13,8 @@
         - focal-wallaby-nvidia-vgpu
         - focal-victoria-nvidia-vgpu
         - focal-ussuri-nvidia-vgpu
+        - bionic-ussuri-nvidia-vgpu
+        - bionic-queens-nvidia-vgpu
     vars:
       needs_charm_build: true
       charm_build_name: nova-compute-nvidia-vgpu
@@ -79,3 +81,17 @@
         soft: true
     vars:
       tox_extra_args: focal-ussuri
+- job:
+    name: bionic-ussuri-nvidia-vgpu
+    description: Run a functional test against bionic-ussuri
+    parent: func-target
+    dependencies: *smoke-jobs
+    vars:
+      tox_extra_args: bionic-ussuri
+- job:
+    name: bionic-queens-nvidia-vgpu
+    description: Run a functional test against bionic-queens
+    parent: func-target
+    dependencies: *smoke-jobs
+    vars:
+      tox_extra_args: bionic-queens

@@ -4,6 +4,8 @@ smoke_bundles:
   - focal-ussuri
 
 gate_bundles:
+  - bionic-queens
+  - bionic-ussuri
   - focal-ussuri
   - focal-victoria
   - focal-wallaby
@@ -12,6 +14,9 @@ gate_bundles:
   - impish-xena
 
 dev_bundles:
+  - bionic-rocky
+  - bionic-stein
+  - bionic-train
   - jammy-yoga
 
 configure:

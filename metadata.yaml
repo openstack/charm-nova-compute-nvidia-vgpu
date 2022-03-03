@@ -8,6 +8,7 @@ description: |
 tags:
 - openstack
 series:
+- bionic
 - focal
 - impish
 subordinate: true

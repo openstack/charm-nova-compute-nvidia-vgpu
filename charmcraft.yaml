@@ -30,6 +30,8 @@ bases:
           - arm64
     run-on:
       - name: ubuntu
+        channel: "18.04"
+      - name: ubuntu
         channel: "20.04"
       - name: ubuntu
         channel: "21.10"
