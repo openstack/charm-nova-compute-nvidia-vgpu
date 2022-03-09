@@ -11,6 +11,7 @@ series:
 - bionic
 - focal
 - impish
+- jammy
 subordinate: true
 provides:
   nova-vgpu:
