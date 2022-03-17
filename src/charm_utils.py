@@ -155,6 +155,10 @@ def set_principal_unit_relation_data(relation_data_to_be_set, config,
     vgpu_device_mappings_str = config.get('vgpu-device-mappings')
     if vgpu_device_mappings_str is not None:
         vgpu_device_mappings = YAML().load(vgpu_device_mappings_str)
+
+        if vgpu_device_mappings is None:  # happens when passing an empty str
+            vgpu_device_mappings = {}
+
         logging.debug('vgpu-device-mappings={}'.format(vgpu_device_mappings))
 
         nova_conf = json.dumps({

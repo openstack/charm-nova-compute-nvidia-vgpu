@@ -168,6 +168,17 @@ class TestCharmUtils(unittest.TestCase):
             'nvidia-vgpu-ubuntu-470',
             relation_data_to_be_set['releases-packages-map'])
 
+        relation_data_to_be_set = {}
+        charm_config = {
+            'vgpu-device-mappings': ''
+        }
+        charm_utils.set_principal_unit_relation_data(
+            relation_data_to_be_set, charm_config, charm_services)
+        self.assertEquals(
+            '{"nova": {"/etc/nova/nova.conf": {"sections": {"devices": '
+            '[["enabled_mdev_types", ""]]}}}}',
+            relation_data_to_be_set['subordinate_configuration'])
+
     @patch('charm_utils.file_hash')
     def test_path_and_hash_nvidia_resource(self, file_hash_mock):
         file_hash_mock.return_value = 'nvidia-software-hash'
