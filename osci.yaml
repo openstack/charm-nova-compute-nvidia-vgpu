@@ -7,7 +7,6 @@
         # of using `charm-ussuri-functional-jobs` as we don't support Bionic.
         - jammy-yoga-nvidia-vgpu:
             voting: false
-        - impish-xena-nvidia-vgpu
         - focal-yoga-nvidia-vgpu
         - focal-xena-nvidia-vgpu
         - focal-wallaby-nvidia-vgpu
@@ -26,13 +25,6 @@
       - focal-ussuri-nvidia-vgpu
     vars:
       tox_extra_args: jammy-yoga
-- job:
-    name: impish-xena-nvidia-vgpu
-    description: Run a functional test against impish-xena
-    parent: func-target
-    dependencies: *smoke-jobs
-    vars:
-      tox_extra_args: impish-xena
 - job:
     name: focal-yoga-nvidia-vgpu
     description: Run a functional test against focal-yoga

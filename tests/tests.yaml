@@ -9,7 +9,6 @@ gate_bundles:
   - focal-wallaby
   - focal-xena
   - focal-yoga
-  - impish-xena
 
 dev_bundles:
   - jammy-yoga
@@ -28,5 +27,4 @@ tests:
 
 tests_options:
   force_deploy:
-  - impish-xena
   - jammy-yoga
