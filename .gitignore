@@ -7,3 +7,4 @@ interfaces
 *__pycache__*
 *.pyc
 /nova-compute-nvidia-vgpu.charm
+*.charm
