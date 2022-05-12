@@ -102,15 +102,15 @@ def list_vgpu_types():
 def has_nvidia_gpu_hardware():
     """Search for NVIDIA GPU hardware.
 
-    :returns: True if some NVIDIA GPU hardware is found on the current
-              unit.
-    :rtype: bool
+    :returns: a tuple of (bool, int) indicating if NVIDIA GPU hardware
+              is found and how many GPU's where detected.
+    :rtype: (bool, int)
     """
     return _has_nvidia_gpu_hardware_notcached()
 
 
 def _has_nvidia_gpu_hardware_notcached():
-    nvidia_gpu_hardware_found = False
+    num_nvidia_devices = 0
     for device in SimpleParser().run():
         device_class = device.cls.name
         device_vendor = device.vendor.name
@@ -124,12 +124,12 @@ def _has_nvidia_gpu_hardware_notcached():
             logging.debug('NVIDIA GPU found: {}'.format(device))
             # NOTE(lourot): we could `break` out here but it's interesting
             # for debugging purposes to print them all.
-            nvidia_gpu_hardware_found = True
+            num_nvidia_devices += 1
 
-    if not nvidia_gpu_hardware_found:
+    if num_nvidia_devices == 0:
         logging.debug('No NVIDIA GPU found.')
 
-    return nvidia_gpu_hardware_found
+    return num_nvidia_devices > 0, num_nvidia_devices
 
 
 def _installed_nvidia_software_packages():

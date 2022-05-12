@@ -58,7 +58,8 @@ def is_nvidia_software_to_be_installed(charm_config):
 
 
 def is_nvidia_software_to_be_installed_notcached(charm_config):
-    return (nvidia_utils.has_nvidia_gpu_hardware() or
+    nvidia_gpu_hardware, _ = nvidia_utils.has_nvidia_gpu_hardware()
+    return (nvidia_gpu_hardware or
             charm_config.get('force-install-nvidia-vgpu'))
 
 
@@ -110,34 +111,24 @@ def check_status(config, services):
     :type services: List[str]
     :rtype: ops.model.StatusBase
     """
-    unit_status_msg = ('no ' if not nvidia_utils.has_nvidia_gpu_hardware()
-                       else '') + 'NVIDIA GPU found; '
-
     installed_versions = nvidia_utils.installed_nvidia_software_versions()
     software_is_installed = len(installed_versions) > 0
+
+    if (is_nvidia_software_to_be_installed(config) and
+            not software_is_installed):
+        return BlockedStatus("NVIDIA GPU detected, drivers not installed")
 
     _, services_not_running_msg = ows_check_services_running(services,
                                                              ports=[])
     software_is_running = services_not_running_msg is None
 
-    if software_is_installed:
-        unit_status_msg += 'installed NVIDIA software: '
-        unit_status_msg += ', '.join(installed_versions)
-        if not software_is_running:
-            # NOTE(lourot): the exact list of services not running that should
-            # be will be displayed in the principal's blocked status message
-            # already, so no need to repeat it here on the subordinate.
-            unit_status_msg += '; reboot required?'
-    else:
-        unit_status_msg += 'no NVIDIA software installed'
+    if software_is_installed and not software_is_running:
+        return BlockedStatus("manual reboot required")
 
-    if ((is_nvidia_software_to_be_installed(config) and
-         not software_is_installed) or
-        (software_is_installed and
-         not software_is_running)):
-        return BlockedStatus(unit_status_msg)
+    nvidia_gpu_hardware, num_gpus = nvidia_utils.has_nvidia_gpu_hardware()
+    unit_status_msg = "{} GPU".format(num_gpus)
 
-    return ActiveStatus('Unit is ready: ' + unit_status_msg)
+    return ActiveStatus('Unit is ready ({})'.format(unit_status_msg))
 
 
 def set_principal_unit_relation_data(relation_data_to_be_set, config,

@@ -54,13 +54,19 @@ class TestNvidiaUtils(unittest.TestCase):
     def test_has_nvidia_gpu_hardware_with_hw(self, lspci_parser_mock):
         lspci_parser_mock.return_value.run.return_value = (
             self._PCI_DEVICES_LIST_WITH_NVIDIA_GPU)
-        self.assertTrue(nvidia_utils._has_nvidia_gpu_hardware_notcached())
+        self.assertEqual(
+            nvidia_utils._has_nvidia_gpu_hardware_notcached(),
+            (True, 1)
+        )
 
     @patch('nvidia_utils.SimpleParser')
     def test_has_nvidia_gpu_hardware_without_hw(self, lspci_parser_mock):
         lspci_parser_mock.return_value.run.return_value = (
             self._PCI_DEVICES_LIST_WITHOUT_GPU)
-        self.assertFalse(nvidia_utils._has_nvidia_gpu_hardware_notcached())
+        self.assertEqual(
+            nvidia_utils._has_nvidia_gpu_hardware_notcached(),
+            (False, 0)
+        )
 
     @patch('nvidia_utils.Path')
     @patch('nvidia_utils.os.listdir')
