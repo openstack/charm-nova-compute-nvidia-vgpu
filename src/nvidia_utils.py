@@ -60,6 +60,9 @@ def disable_nouveau_driver():
     update_initramfs()
 
 
+GPU_DEVICE_CLASS = '0x030200'
+
+
 def list_vgpu_types():
     """Human-readable list of all vGPU types registered by the NVIDIA driver.
 
@@ -72,6 +75,14 @@ def list_vgpu_types():
     found_pci_addr_dirs = []
     for root, dirs, files in os.walk('/sys/devices'):
         if vgpu_types_dirname in dirs:
+            # Other types of device can present mediated devices
+            # so ensure that only 3D controller class devices
+            # are listed
+            device_class = (
+                Path(os.path.join(root, 'class')).read_text().rstrip()
+            )
+            if device_class != GPU_DEVICE_CLASS:
+                continue
             # At this point root looks like
             # /sys/devices/pci0000:40/0000:40:03.1/0000:41:00.0
             found_pci_addr_dirs.append(root)
@@ -118,7 +129,7 @@ def _has_nvidia_gpu_hardware_notcached():
             device_subsystem_vendor = device.subsystem_vendor.name
         except AttributeError:
             device_subsystem_vendor = ''
-
+        logging.debug(device_class)
         if '3D' in device_class and ('NVIDIA' in device_vendor or
                                      'NVIDIA' in device_subsystem_vendor):
             logging.debug('NVIDIA GPU found: {}'.format(device))

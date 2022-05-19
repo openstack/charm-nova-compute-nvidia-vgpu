@@ -79,30 +79,19 @@ class TestNvidiaUtils(unittest.TestCase):
              ['mdev_supported_types'], []),
         ]
         os_listdir_mock.side_effect = [
-            ['nvidia-256', 'nvidia-257'],
             ['nvidia-301'],
         ]
         path_mock_obj = MagicMock()
         path_mock.return_value = path_mock_obj
         path_mock_obj.read_text.side_effect = [
-            'GRID RTX6000-1Q',
-            ('num_heads=4, frl_config=60, framebuffer=1024M, '
-             'max_resolution=5120x2880, max_instance=24'),
-            'GRID RTX6000-2Q',
-            ('num_heads=4, frl_config=60, framebuffer=2048M, '
-             'max_resolution=7680x4320, max_instance=12'),
+            '0x030000',  # causes device to not be included
+            '0x030200',
             'GRID V100-16C',
             ('num_heads=1, frl_config=60, framebuffer=16384M, '
              'max_resolution=4096x2160, max_instance=1'),
         ]
 
         expected_output = '\n'.join([
-            ('nvidia-256, 0000:41:00.0, GRID RTX6000-1Q, num_heads=4, '
-             'frl_config=60, framebuffer=1024M, max_resolution=5120x2880, '
-             'max_instance=24'),
-            ('nvidia-257, 0000:41:00.0, GRID RTX6000-2Q, num_heads=4, '
-             'frl_config=60, framebuffer=2048M, max_resolution=7680x4320, '
-             'max_instance=12'),
             ('nvidia-301, 0000:c1:00.0, GRID V100-16C, num_heads=1, '
              'frl_config=60, framebuffer=16384M, max_resolution=4096x2160, '
              'max_instance=1'),
