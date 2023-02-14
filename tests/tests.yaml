@@ -1,15 +1,15 @@
 charm_name: nova-compute-nvidia-vgpu
 
 smoke_bundles:
-  - jammy-yoga
+  - jammy-zed
 
 gate_bundles:
-  - jammy-yoga
+  - jammy-zed
 
 dev_bundles:
-  - jammy-yoga
-  - jammy-zed
+  - jammy-antelope
   - kinetic-zed
+  - lunar-antelope
 
 configure:
   - zaza.openstack.charm_tests.glance.setup.add_cirros_image
@@ -26,3 +26,4 @@ tests:
 tests_options:
   force_deploy:
   - kinetic-zed
+  - lunar-antelope

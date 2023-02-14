@@ -3,7 +3,7 @@ local_overlay_enabled: False
 variables:
   openstack-origin: &openstack-origin distro
 
-series: jammy
+series: lunar
 
 comment:
 - 'machines section to decide order of deployment. database sooner = faster'

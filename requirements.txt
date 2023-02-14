@@ -2,6 +2,6 @@ importlib-resources
 ops
 
 git+https://opendev.org/openstack/charm-ops-openstack#egg=ops_openstack
-
+git+https://github.com/juju/charm-helpers.git#egg=charmhelpers
 ruamel.yaml
 pylspci

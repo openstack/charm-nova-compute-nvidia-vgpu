@@ -1,7 +1,7 @@
 - project:
     templates:
-      - charm-zed-unit-jobs
-      - charm-zed-functional-jobs
+      - charm-unit-jobs
+      - charm-functional-jobs
     vars:
       needs_charm_build: true
       charm_build_name: nova-compute-nvidia-vgpu
