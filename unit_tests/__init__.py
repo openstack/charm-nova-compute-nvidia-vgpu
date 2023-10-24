@@ -11,3 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# Patch out lsb_release() and get_platform() as unit tests should be fully
+# insulated from the underlying platform.  Unit tests assume that the system is
+# ubuntu jammy.
+
+from unittest.mock import patch
+
+
+patch(
+    'charmhelpers.osplatform.get_platform', return_value='ubuntu'
+).start()
+patch(
+    'charmhelpers.core.host.lsb_release',
+    return_value={
+        'DISTRIB_CODENAME': 'jammy'
+    }).start()
