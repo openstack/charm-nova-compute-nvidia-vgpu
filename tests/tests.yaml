@@ -1,16 +1,13 @@
 charm_name: nova-compute-nvidia-vgpu
 
 smoke_bundles:
-  - jammy-antelope
-
+  - jammy-caracal
 gate_bundles:
   - jammy-antelope
-
-dev_bundles:
   - jammy-bobcat
-  - lunar-antelope
-  - mantic-bobcat
-
+  - jammy-caracal
+dev_bundles:
+  - noble-caracal
 configure:
   - zaza.openstack.charm_tests.glance.setup.add_cirros_image
   - zaza.openstack.charm_tests.glance.setup.add_lts_image
@@ -25,5 +22,4 @@ tests:
 
 tests_options:
   force_deploy:
-  - lunar-antelope
-  - mantic-bobcat
+    - noble-caracal

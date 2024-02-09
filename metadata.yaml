@@ -6,11 +6,9 @@ description: |
   .
   This charm provides Nvidia vGPU support for Nova.
 tags:
-- openstack
+  - openstack
 series:
-- jammy
-- lunar
-- mantic
+  - jammy
 subordinate: true
 provides:
   nova-vgpu:
