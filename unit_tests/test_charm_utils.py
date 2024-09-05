@@ -178,7 +178,7 @@ class TestCharmUtils(unittest.TestCase):
         }
         charm_utils.set_principal_unit_relation_data(
             relation_data_to_be_set, charm_config, charm_services)
-        self.assertEquals(
+        self.assertEqual(
             '{"nova": {"/etc/nova/nova.conf": {"sections": {"devices": '
             '[["enabled_mdev_types", ""]]}}}}',
             relation_data_to_be_set['subordinate_configuration'])
