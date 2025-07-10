@@ -22,7 +22,7 @@ parts:
 bases:
   - build-on:
       - name: ubuntu
-        channel: "20.04"
+        channel: "22.04"
         architectures:
           - amd64
           - s390x
@@ -31,3 +31,5 @@ bases:
     run-on:
       - name: ubuntu
         channel: "20.04"
+      - name: ubuntu
+        channel: "22.04"
