@@ -15,7 +15,7 @@
 import sys
 import unittest
 
-from mock import ANY, MagicMock, patch
+from mock import ANY, MagicMock, patch, call
 
 sys.path.append('src')  # noqa
 
@@ -250,3 +250,25 @@ class TestCharmUtils(unittest.TestCase):
         with self.assertRaises(charm_utils.UnsupportedOpenStackRelease):
             release_codename_mock.return_value = 'pike'
             charm_utils._nova_conf_sections(vgpu_device_mappings)
+
+    @patch.object(charm_utils, 'service')
+    @patch.object(charm_utils, 'render')
+    @patch.object(charm_utils.os, 'chmod')
+    @patch.object(charm_utils.shutil, 'copy')
+    def test_install_mdev_init_workaround(self, mock_copy, mock_chmod,
+                                          mock_render, mock_service):
+        charm_config = {
+            'vgpu-device-mappings': "{'nvidia-35': ['0000:84:00.0']}"
+        }
+        charm_utils.install_mdev_init_workaround(charm_config)
+        mock_copy.assert_has_calls([call('files/initialise_nova_mdevs.sh',
+                                         '/opt/initialise_nova_mdevs.sh')])
+        mock_render.assert_has_calls([
+            call('remediate_nova_mdevs.py',
+                 '/opt/remediate-nova-mdevs',
+                 {'mdev_types': {
+                     'nvidia-35': ['0000:84:00.0']}},
+                 perms=493),
+            call('systemd-mdev-workaround.service',
+                 '/etc/systemd/system/systemd-mdev-workaround.service', {},
+                 perms=420)])
