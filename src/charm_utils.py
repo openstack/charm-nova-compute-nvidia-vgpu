@@ -17,6 +17,8 @@
 
 import logging
 import json
+import os
+import shutil
 
 from ruamel.yaml import YAML
 
@@ -26,7 +28,8 @@ from charmhelpers.contrib.openstack.utils import (
     ows_check_services_running,
 )
 from charmhelpers.core.hookenv import cached
-from charmhelpers.core.host import file_hash
+from charmhelpers.core.host import file_hash, service
+from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 
 from ops.model import (
@@ -272,3 +275,26 @@ def _releases_packages_map():
 
 def _get_current_release():
     return get_os_codename_package('nova-common', fatal=False) or 'queens'
+
+
+def install_mdev_init_workaround(config):
+    logging.info("Installing mdev initialisation workaround.")
+    shutil.copy('files/initialise_nova_mdevs.sh',
+                '/opt/initialise_nova_mdevs.sh')
+    os.chmod('/opt/initialise_nova_mdevs.sh', 0o755)
+
+    vgpu_device_mappings = YAML().load(config.get('vgpu-device-mappings') or
+                                       "")
+    render(
+        'remediate_nova_mdevs.py',
+        '/opt/remediate-nova-mdevs',
+        {'mdev_types': vgpu_device_mappings},
+        perms=0o755)
+
+    render(
+        'systemd-mdev-workaround.service',
+        '/etc/systemd/system/systemd-mdev-workaround.service',
+        {},
+        perms=0o644)
+    service('enable', 'systemd-mdev-workaround')
+    # enable but not start since this needs to be done once on boot
