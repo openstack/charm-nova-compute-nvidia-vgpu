@@ -8,7 +8,7 @@ ops==2.2.0
 git+https://opendev.org/openstack/charm-ops-openstack#egg=ops_openstack
 pbr==5.11.1
 pylspci==0.4.3
-PyYAML==6.0
+PyYAML==6.0.1
 ruamel.yaml==0.17.21
 ruamel.yaml.clib==0.2.7
 websocket-client==1.5.1

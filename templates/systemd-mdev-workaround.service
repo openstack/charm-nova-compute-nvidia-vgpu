@@ -1,0 +1,12 @@
+[Unit]
+Description=GPU MDev Initialisation Workaround for OpenStack Nova
+Before=nova-compute.service
+After=syslog.target network.target libvirtd.service nvidia-vgpu-mgr.service
+
+[Service]
+Environment="MDEV_INIT_DRY_RUN=False"
+Type=oneshot
+ExecStart=/bin/bash /opt/initialise_nova_mdevs.sh
+
+[Install]
+WantedBy=multi-user.target
