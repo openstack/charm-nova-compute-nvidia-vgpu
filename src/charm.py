@@ -24,6 +24,7 @@ from charm_utils import (
     install_nvidia_software_if_needed,
     is_nvidia_software_to_be_installed,
     set_principal_unit_relation_data,
+    install_mdev_init_workaround,
 )
 from nvidia_utils import list_vgpu_types
 
@@ -41,6 +42,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         super().register_status_check(self._check_status)
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.framework.observe(self.on.upgrade_charm, self._on_upgrade)
         self.framework.observe(self.on.start, self._on_start)
         self.framework.observe(self.on.nova_vgpu_relation_joined,
                                self._on_nova_vgpu_relation_joined_or_changed)
@@ -67,6 +69,11 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
         self.update_status()
 
+    def _on_upgrade(self, _):
+        """ upgrade-charm hook."""
+        install_mdev_init_workaround(self.config)
+        self.update_status()
+
     def _on_start(self, _):
         """start hook."""
         # NOTE(lourot): We install software in the `start` hook instead of
@@ -78,7 +85,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
         # NOTE(lourot): this is used by OSBaseCharm.update_status():
         self._stored.is_started = True
-
+        install_mdev_init_workaround(self.config)
         self.update_status()
 
     def _on_nova_vgpu_relation_joined_or_changed(self, event):
