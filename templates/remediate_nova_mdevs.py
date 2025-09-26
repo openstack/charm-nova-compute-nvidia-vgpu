@@ -45,13 +45,16 @@ class PlacementHelper():
     """
     Helper for Placement operations.
     """
-    DRIVER_TRAIT_MAPPING = {'nvidia-610': 'CUSTOM_VGPU_PLACEMENT'}
 
     def __init__(self):
         self.fqdn = socket.getfqdn()
         self.client = self._get_sdk_adapter_helper("placement")
         if self.client is None:
             raise PlacementError("failed to get placement client")
+
+    @property
+    def driver_trait_mapping(self):
+        return {mtype: 'CUSTOM_VGPU_PLACEMENT' for mtype in MDEV_TYPES}
 
     @staticmethod
     def _get_sdk_adapter_helper(service_type):
@@ -99,7 +102,7 @@ class PlacementHelper():
         if not _traits:
             raise PlacementError("no traits identified from the placement api")
 
-        for trait in self.DRIVER_TRAIT_MAPPING.values():
+        for trait in self.driver_trait_mapping.values():
             if trait not in _traits['traits']:
                 raise PlacementError(f"trait {trait} not found in placement "
                                      "traits")
@@ -170,7 +173,14 @@ class PlacementHelper():
         pci_id_parts = addr.split('_')
         return get_pci_address(*pci_id_parts)
 
-    def update_gpu_traits(self, rpname, rpuuid, dry_run=False):
+    def update_gpu_traits(self, dry_run=False):
+        if not self.local_compute_rps:
+            return
+
+        for rp in self.local_compute_rps:
+            self.update_gpu_trait(rp['name'], rp['uuid'], dry_run)
+
+    def update_gpu_trait(self, rpname, rpuuid, dry_run=False):
         LOG.info("updating gpu traits for resource provider %s", rpuuid)
         traits = self.get_traits_for_rp(rpuuid)
         if traits is None:
@@ -187,12 +197,12 @@ class PlacementHelper():
 
             return
 
-        if driver not in self.DRIVER_TRAIT_MAPPING:
+        if driver not in self.driver_trait_mapping:
             LOG.error("failed to map driver '%s' to a trait for PCI "
                       "address %s", driver, pci_address)
             return
 
-        expected_traits = [self.DRIVER_TRAIT_MAPPING[driver]]
+        expected_traits = [self.driver_trait_mapping[driver]]
         if expected_traits != traits['traits']:
             if dry_run:
                 LOG.warning("rp %s for %s is mapped to driver %s but "
@@ -334,12 +344,7 @@ def main(dry_run=False):
                 LOG.error(exc)
                 failed = True
 
-    if not pm.local_compute_rps:
-        return
-
-    for rp in pm.local_compute_rps:
-        pm.update_gpu_traits(rp['name'], rp['uuid'], dry_run)
-
+    pm.update_gpu_traits(dry_run)
     if failed:
         raise PlacementError("failed to update one or more placement traits")
 
