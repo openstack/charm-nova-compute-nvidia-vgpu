@@ -16,6 +16,7 @@
       needs_charm_build: true
       charm_build_name: nova-compute-nvidia-vgpu
       build_type: charmcraft
+      charmcraft_channel: 3.x/stable
 
 - job:
     name: jammy-yoga-nvidia-vgpu
