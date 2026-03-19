@@ -376,7 +376,7 @@ packaging==24.0
     # via oslo-utils
 paramiko==2.12.0
     # via juju
-pbr==6.0.0
+pbr==7.0.3
     # via
     #   aodhclient
     #   charmhelpers
