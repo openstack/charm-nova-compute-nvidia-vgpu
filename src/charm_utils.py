@@ -179,10 +179,11 @@ def _path_and_hash_nvidia_resource(resources):
     :type resources: ops.model.Resources
     :returns: Pair of path and hash. (None, None) if no charm resource has
               been provided.
-    :rtype: Tuple[PosixPath, str]
+    :rtype: Tuple[str, str]
     """
     try:
-        nvidia_vgpu_software_path = resources.fetch('nvidia-vgpu-software')
+        nvidia_vgpu_software_path = str(
+            resources.fetch('nvidia-vgpu-software'))
     except ModelError:
         return None, None
 
