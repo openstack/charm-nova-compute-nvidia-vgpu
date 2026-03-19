@@ -14,6 +14,7 @@
 
 import sys
 import unittest
+from pathlib import PosixPath
 
 from mock import ANY, MagicMock, patch, call
 
@@ -187,7 +188,7 @@ class TestCharmUtils(unittest.TestCase):
     def test_path_and_hash_nvidia_resource(self, file_hash_mock):
         file_hash_mock.return_value = 'nvidia-software-hash'
         resources = MagicMock()
-        resources.fetch.return_value = 'nvidia-software-path'
+        resources.fetch.return_value = PosixPath('nvidia-software-path')
 
         self.assertEqual(charm_utils._path_and_hash_nvidia_resource(resources),
                          ('nvidia-software-path', 'nvidia-software-hash'))
