@@ -26,7 +26,7 @@ ops==2.12.0
     #   ops-openstack
 ops-openstack @ git+https://opendev.org/openstack/charm-ops-openstack
     # via -r requirements.in
-pbr==6.0.0
+pbr==7.0.3
     # via charmhelpers
 pylspci==0.4.3
     # via -r requirements.in
