@@ -33,15 +33,24 @@ creation. Start by listing the available vGPU types for each physical GPU:
 
     juju run-action nova-compute-nvidia-vgpu/0 list-vgpu-types --wait
     [...]
-        nvidia-256, 0000:41:00.0, GRID RTX6000-1Q, num_heads=4, frl_config=60, framebuffer=1024M, max_resolution=5120x2880, max_instance=24
-        nvidia-257, 0000:41:00.0, GRID RTX6000-2Q, num_heads=4, frl_config=60, framebuffer=2048M, max_resolution=7680x4320, max_instance=12
-        nvidia-258, 0000:41:00.0, GRID RTX6000-3Q, num_heads=4, frl_config=60, framebuffer=3072M, max_resolution=7680x4320, max_instance=8
-        nvidia-259, 0000:41:00.0, GRID RTX6000-4Q, num_heads=4, frl_config=60, framebuffer=4096M, max_resolution=7680x4320, max_instance=6
+      results:
+        vgpu-types-count: "1472"
+        result: |-
+          1472 vGPU type(s) found
+          see 'juju ssh -m <model> nova-compute-nvidia-vgpu/0 cat <charm-dir>/vgpu-types-results/vgpu-types-XXXXXX.txt' for the full list
+
+The full listing can be very large on hosts with many GPUs (for example SR-IOV
+vGPU with dozens of virtual functions), so instead of returning it inline the
+action writes it to a file under the charm's base directory on the unit and the
+`result` field tells you how to read it. This keeps the results within the
+operating system's argument-size limit. Run the exact `juju ssh ... cat`
+command from `result` to print the full list:
+
+    juju ssh -m <model> nova-compute-nvidia-vgpu/0 cat <charm-dir>/vgpu-types-results/vgpu-types-XXXXXX.txt
+    nvidia-256, 0000:41:00.0, GRID RTX6000-1Q, num_heads=4, frl_config=60, framebuffer=1024M, max_resolution=5120x2880, max_instance=24
+    nvidia-257, 0000:41:00.0, GRID RTX6000-2Q, num_heads=4, frl_config=60, framebuffer=2048M, max_resolution=7680x4320, max_instance=12
     [...]
-        nvidia-105, 0000:c1:00.0, GRID V100-1Q, num_heads=4, frl_config=60, framebuffer=1024M, max_resolution=5120x2880, max_instance=16
-        nvidia-106, 0000:c1:00.0, GRID V100-2Q, num_heads=4, frl_config=60, framebuffer=2048M, max_resolution=7680x4320, max_instance=8
-        nvidia-107, 0000:c1:00.0, GRID V100-4Q, num_heads=4, frl_config=60, framebuffer=4096M, max_resolution=7680x4320, max_instance=4
-        nvidia-108, 0000:c1:00.0, GRID V100-8Q, num_heads=4, frl_config=60, framebuffer=8192M, max_resolution=7680x4320, max_instance=2
+    nvidia-108, 0000:c1:00.0, GRID V100-8Q, num_heads=4, frl_config=60, framebuffer=8192M, max_resolution=7680x4320, max_instance=2
     [...]
 
 As we can see, `nova-compute-nvidia-vgpu/0` has two physical GPUs:

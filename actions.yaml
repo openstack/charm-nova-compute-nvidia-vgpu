@@ -1,2 +1,11 @@
 list-vgpu-types:
-  description: List all vGPU types registered by the NVIDIA driver.
+  description: >
+    List all vGPU types registered by the NVIDIA driver.
+
+    The action results report the number of vGPU types found in
+    'vgpu-types-count'. The complete listing can be very large on hosts with
+    many GPUs (e.g. SR-IOV vGPU), so instead of returning it inline it is
+    written to a file under the charm's base directory on the unit; the
+    'result' field contains a 'juju ssh ... cat <file>' command to read it.
+    This keeps the results within the operating system's argument-size limit
+    regardless of the number of GPUs.

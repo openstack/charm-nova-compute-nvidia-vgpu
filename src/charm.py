@@ -15,6 +15,9 @@
 # limitations under the License.
 
 
+import os
+from pathlib import Path
+
 import ops_openstack.plugins.classes
 
 from ops.main import main
@@ -27,6 +30,9 @@ from charm_utils import (
     install_mdev_init_workaround,
 )
 from nvidia_utils import list_vgpu_types
+
+
+VGPU_TYPES_RESULTS_DIRNAME = 'vgpu-types-results'
 
 
 class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
@@ -117,7 +123,25 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
         :type event: ops.charm.ActionEvent
         """
-        event.set_results({'output': list_vgpu_types()})
+        output = list_vgpu_types()
+        lines = output.splitlines() if output else []
+
+        results_dir = os.path.join(self.charm_dir, VGPU_TYPES_RESULTS_DIRNAME)
+        os.makedirs(results_dir, exist_ok=True)
+        with open(os.path.join(results_dir, 'vgpu-types.txt'),
+                  mode='w',) as outfile:
+            outfile.write(output)
+            if output and not output.endswith('\n'):
+                outfile.write('\n')
+        Path(outfile.name).chmod(0o644)
+
+        event.set_results({
+            'vgpu-types-count': len(lines),
+            'result':
+                "{0} vGPU type(s) found\n"
+                "see 'juju ssh -m {1} {2} cat {3}' for the full list"
+                .format(len(lines), self.model.name, self.unit.name,
+                        outfile.name)})
 
 
 if __name__ == '__main__':
