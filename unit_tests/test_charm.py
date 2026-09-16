@@ -163,3 +163,47 @@ class TestNovaComputeNvidiaVgpuCharm(CharmTestCase):
         self.assertIn(output_file, results['result'])
         with open(output_file) as f:
             self.assertEqual(f.read(), '')
+
+    @patch('charm.nvidia_utils.detect_vgpu_mode_with_override')
+    @patch('charm.list_vgpu_types_vfio')
+    @patch('charm.list_vgpu_types')
+    def test_list_vgpu_types_action_vfio_mode(
+            self, list_vgpu_types_mock, list_vgpu_types_vfio_mock,
+            detect_mode_mock):
+        detect_mode_mock.return_value = 'vfio'
+        list_vgpu_types_vfio_mock.return_value = '560, 0000:1b:00.4, A40-4Q'
+
+        charm_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, charm_dir)
+        self.harness.charm.framework.charm_dir = Path(charm_dir)
+
+        out = self.harness.run_action('list-vgpu-types')
+
+        list_vgpu_types_vfio_mock.assert_called_once_with()
+        list_vgpu_types_mock.assert_not_called()
+        self.assertEqual(out.results['vgpu-types-count'], 1)
+        with open(os.path.join(charm_dir, charm.VGPU_TYPES_RESULTS_DIRNAME,
+                               'vgpu-types.txt')) as f:
+            self.assertEqual(f.read(), '560, 0000:1b:00.4, A40-4Q\n')
+
+    @patch('charm.nvidia_utils.detect_vgpu_mode_with_override')
+    @patch('charm.list_vgpu_types_vfio')
+    @patch('charm.list_vgpu_types')
+    def test_list_vgpu_types_action_mdev_mode(
+            self, list_vgpu_types_mock, list_vgpu_types_vfio_mock,
+            detect_mode_mock):
+        detect_mode_mock.return_value = 'mdev'
+        list_vgpu_types_mock.return_value = 'nvidia-256, 0000:41:00.0, T4-8Q'
+
+        charm_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, charm_dir)
+        self.harness.charm.framework.charm_dir = Path(charm_dir)
+
+        out = self.harness.run_action('list-vgpu-types')
+
+        list_vgpu_types_mock.assert_called_once_with()
+        list_vgpu_types_vfio_mock.assert_not_called()
+        self.assertEqual(out.results['vgpu-types-count'], 1)
+        with open(os.path.join(charm_dir, charm.VGPU_TYPES_RESULTS_DIRNAME,
+                               'vgpu-types.txt')) as f:
+            self.assertEqual(f.read(), 'nvidia-256, 0000:41:00.0, T4-8Q\n')
