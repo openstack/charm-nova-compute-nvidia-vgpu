@@ -15,6 +15,7 @@
 # limitations under the License.
 
 
+import logging
 import os
 from pathlib import Path
 
@@ -29,7 +30,8 @@ from charm_utils import (
     set_principal_unit_relation_data,
     install_mdev_init_workaround,
 )
-from nvidia_utils import list_vgpu_types
+from nvidia_utils import list_vgpu_types, list_vgpu_types_vfio
+import nvidia_utils
 
 
 VGPU_TYPES_RESULTS_DIRNAME = 'vgpu-types-results'
@@ -123,8 +125,16 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
         :type event: ops.charm.ActionEvent
         """
-        output = list_vgpu_types()
+        mode = nvidia_utils.detect_vgpu_mode_with_override(
+            self.config.get('vgpu-mode', 'auto'))
+        if mode == 'vfio':
+            output = list_vgpu_types_vfio()
+        else:
+            output = list_vgpu_types()
         lines = output.splitlines() if output else []
+        logging.debug(
+            'list-vgpu-types action: vGPU mode=%s, %d output line(s)',
+            mode, len(lines))
 
         results_dir = os.path.join(self.charm_dir, VGPU_TYPES_RESULTS_DIRNAME)
         os.makedirs(results_dir, exist_ok=True)
