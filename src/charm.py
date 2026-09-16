@@ -28,7 +28,7 @@ from charm_utils import (
     install_nvidia_software_if_needed,
     is_nvidia_software_to_be_installed,
     set_principal_unit_relation_data,
-    install_mdev_init_workaround,
+    install_vgpu_init_workaround,
 )
 from nvidia_utils import list_vgpu_types, list_vgpu_types_vfio
 import nvidia_utils
@@ -70,6 +70,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
         # version has just been provided as a charm resource.
         install_nvidia_software_if_needed(self._stored, self.config,
                                           self.framework.model.resources)
+        install_vgpu_init_workaround(self.config)
 
         for relation in self.framework.model.relations.get('nova-vgpu'):
             set_principal_unit_relation_data(relation.data[self.unit],
@@ -79,7 +80,7 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
     def _on_upgrade(self, _):
         """ upgrade-charm hook."""
-        install_mdev_init_workaround(self.config)
+        install_vgpu_init_workaround(self.config)
         self.update_status()
 
     def _on_start(self, _):
@@ -93,7 +94,13 @@ class NovaComputeNvidiaVgpuCharm(ops_openstack.core.OSBaseCharm):
 
         # NOTE(lourot): this is used by OSBaseCharm.update_status():
         self._stored.is_started = True
-        install_mdev_init_workaround(self.config)
+        install_vgpu_init_workaround(self.config)
+
+        # NOTE: start also runs after a reboot, which is when the vGPU mode
+        # becomes detectable and VFIO profiles get applied.
+        for relation in self.framework.model.relations.get('nova-vgpu'):
+            set_principal_unit_relation_data(relation.data[self.unit],
+                                             self.config, self.services())
         self.update_status()
 
     def _on_nova_vgpu_relation_joined_or_changed(self, event):

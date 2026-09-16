@@ -19,6 +19,7 @@ import logging
 import json
 import os
 import shutil
+import subprocess
 
 from ruamel.yaml import YAML
 
@@ -27,7 +28,7 @@ from charmhelpers.contrib.openstack.utils import (
     get_os_codename_package,
     ows_check_services_running,
 )
-from charmhelpers.core.hookenv import cached
+from charmhelpers.core.hookenv import cached, charm_dir
 from charmhelpers.core.host import file_hash, service
 from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_cache, apt_install
@@ -158,6 +159,11 @@ def check_status(config, services):
     mode = nvidia_utils.detect_vgpu_mode_with_override(
         config.get('vgpu-mode', 'auto'))
     if mode == 'vfio':
+        failure = _vfio_host_setup_failure()
+        if failure:
+            return BlockedStatus(
+                'VFIO host setup failed: {} (see journalctl -u '
+                'nvidia-vgpu-host-setup)'.format(failure))
         try:
             compute_vfio_desired_state(config)
         except vfio_utils.InvalidGpuProfiles as error:
@@ -183,11 +189,32 @@ def check_status(config, services):
             return BlockedStatus(
                 '{} vGPU profile change(s) pending, manual reboot '
                 'required'.format(len(pending_vfs)))
+        heterogeneous = _heterogeneous_gpus(desired_state)
+        if heterogeneous:
+            return BlockedStatus(
+                'vGPU heterogeneous mode enabled on {}, manual reboot '
+                'required to disable it'.format(', '.join(heterogeneous)))
 
     nvidia_gpu_hardware, num_gpus = nvidia_utils.has_nvidia_gpu_hardware()
     unit_status_msg = "{} GPU".format(num_gpus)
 
     return ActiveStatus('Unit is ready ({})'.format(unit_status_msg))
+
+
+def _heterogeneous_gpus(desired_state):
+    """GPUs with desired vGPUs that are in vGPU heterogeneous mode."""
+    pf_addresses = sorted({vf.pf_pci_address for vf in desired_state.vfs})
+    return [pf_address for pf_address in pf_addresses
+            if vfio_utils.read_heterogeneous_mode(pf_address)]
+
+
+def _vfio_host_setup_failure():
+    try:
+        with open(vfio_utils.DEFAULT_FAILURE_FILE) as failure_file:
+            lines = failure_file.read().splitlines()
+    except FileNotFoundError:
+        return None
+    return lines[0] if lines else 'unknown error'
 
 
 def set_principal_unit_relation_data(relation_data_to_be_set, config,
@@ -541,3 +568,75 @@ def install_mdev_init_workaround(config):
         perms=0o644)
     service('enable', 'systemd-mdev-workaround')
     # enable but not start since this needs to be done once on boot
+
+
+def install_vfio_host_setup():
+    """Install the VFIO boot-time host setup script and systemd service.
+
+    This installs:
+    - /opt/nvidia-vgpu-host-setup.sh (the boot-time script)
+    - /etc/systemd/system/nvidia-vgpu-host-setup.service (systemd unit)
+    """
+    logging.info("Installing VFIO host setup script and systemd service.")
+    shutil.copy('files/nvidia-vgpu-host-setup.sh',
+                '/opt/nvidia-vgpu-host-setup.sh')
+    os.chmod('/opt/nvidia-vgpu-host-setup.sh', 0o755)
+
+    render(
+        'nvidia-vgpu-host-setup.service',
+        '/etc/systemd/system/nvidia-vgpu-host-setup.service',
+        {'script_path': '/opt/nvidia-vgpu-host-setup.sh',
+         'charm_dir': charm_dir()},
+        perms=0o644)
+    _systemd_daemon_reload()
+    service('enable', 'nvidia-vgpu-host-setup')
+
+
+def _systemd_daemon_reload():
+    subprocess.check_call(['systemctl', 'daemon-reload'])
+
+
+def install_vgpu_init_workaround(config):
+    """Install the appropriate vGPU init workaround based on mode.
+
+    :param config: Juju application config
+    :type config: ops.model.ConfigData
+    """
+    mode = nvidia_utils.detect_vgpu_mode_with_override(
+        config.get('vgpu-mode', 'auto'))
+
+    if mode == 'vfio':
+        install_vfio_host_setup()
+        _disable_service_if_exists('systemd-mdev-workaround')
+        # The boot-time setup applies the desired state, so keep it current
+        # even when the nova-vgpu relation does not exist yet.
+        try:
+            generate_vfio_desired_state(config)
+        except (vfio_utils.InvalidGpuProfiles,
+                vfio_utils.IntentNotSatisfiable) as error:
+            logging.error('VFIO desired state not updated: %s', error)
+    elif mode == 'mdev':
+        install_mdev_init_workaround(config)
+        _disable_service_if_exists('nvidia-vgpu-host-setup')
+    else:
+        # Before the first reboot the driver is not loaded and SR-IOV VFs,
+        # where both nvidia/ and mdev_supported_types live, are not enabled
+        # yet, so the mode cannot be detected. Install both boot-time units;
+        # each enables the VFs and the unused one is removed once the mode
+        # is known.
+        logging.info('vGPU mode not detected yet, installing all boot-time '
+                     'setup units')
+        install_mdev_init_workaround(config)
+        if is_nvidia_software_to_be_installed(config):
+            install_vfio_host_setup()
+
+
+def _disable_service_if_exists(service_name):
+    unit_path = '/etc/systemd/system/{}.service'.format(service_name)
+    if not os.path.exists(unit_path):
+        return
+
+    service('disable', service_name)
+    os.remove(unit_path)
+    _systemd_daemon_reload()
+    logging.info('Disabled and removed %s', unit_path)

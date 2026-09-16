@@ -1,0 +1,15 @@
+[Unit]
+Description=NVIDIA vGPU Host Setup (VF enablement + profile assignment)
+Before=nova-compute.service
+After=nvidia-vgpu-mgr.service nvidia-vgpud.service libvirtd.service
+Wants=nvidia-vgpu-mgr.service nvidia-vgpud.service
+
+[Service]
+User=root
+Type=oneshot
+RemainAfterExit=yes
+Environment=VGPU_CHARM_DIR={{ charm_dir }}
+ExecStart={{ script_path }}
+
+[Install]
+WantedBy=multi-user.target

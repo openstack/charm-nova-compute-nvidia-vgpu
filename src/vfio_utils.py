@@ -12,6 +12,8 @@
 import logging
 import os
 import re
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from typing import List
 
@@ -20,6 +22,8 @@ from ruamel.yaml import YAML, YAMLError
 
 DEFAULT_STATE_FILE = '/etc/nvidia-vgpu-state.yaml'
 DEFAULT_CATALOG_FILE = '/etc/nvidia-vgpu-catalog.yaml'
+DEFAULT_FAILURE_FILE = '/run/nvidia-vgpu-host-setup-failed'
+NVIDIA_SMI = 'nvidia-smi'
 PROFILE_POLICIES = ('ignore', 'fail')
 
 SYS_PCI_BASE = '/sys/bus/pci/devices'
@@ -114,6 +118,22 @@ def has_vendor_vfio_dir(address):
 def has_mdev_supported_types(address):
     return os.path.isdir(
         os.path.join(SYS_PCI_BASE, address, 'mdev_supported_types'))
+
+
+def list_sriov_gpus():
+    """List NVIDIA GPU physical functions that support SR-IOV."""
+    gpus = []
+    for address in sorted(os.listdir(SYS_PCI_BASE)):
+        try:
+            vendor = _read_sysfs(address, 'vendor').strip()
+            device_class = _read_sysfs(address, 'class').strip()
+        except OSError:
+            continue
+        if (vendor == '0x10de' and device_class.startswith('0x0302') and
+                not is_virtual_function(address) and
+                sriov_total_vfs(address) > 0):
+            gpus.append(address)
+    return gpus
 
 
 def list_vfs(pf_address):
@@ -474,3 +494,173 @@ def _unmet(errors, spec, message):
         errors.append(message)
     else:
         logging.warning('%s (policy=ignore)', message)
+
+
+def _nvidia_smi(*args):
+    return subprocess.check_output((NVIDIA_SMI,) + args,
+                                   universal_newlines=True)
+
+
+def _nvidia_smi_gpu_index(pf_address):
+    output = _nvidia_smi('--query-gpu=index,pci.bus_id',
+                         '--format=csv,noheader')
+    for line in output.splitlines():
+        index, _, bus_id = (field.strip() for field in line.partition(','))
+        domain, _, rest = bus_id.lower().partition(':')
+        if '{}:{}'.format(domain[-4:], rest) == pf_address:
+            return index
+    return None
+
+
+def read_heterogeneous_mode(pf_address):
+    """Read the vGPU heterogeneous mode of a GPU with nvidia-smi.
+
+    :returns: True or False, None when it cannot be determined.
+    :rtype: Optional[bool]
+    """
+    try:
+        index = _nvidia_smi_gpu_index(pf_address)
+        if index is None:
+            return None
+        output = _nvidia_smi('-q', '-i', index)
+    except (OSError, subprocess.CalledProcessError) as error:
+        logging.warning('Cannot query %s with nvidia-smi: %s',
+                        pf_address, error)
+        return None
+    for line in output.splitlines():
+        key, _, value = line.partition(':')
+        if key.strip() == 'vGPU Heterogeneous Mode':
+            return value.strip().lower() == 'enabled'
+    return None
+
+
+def disable_heterogeneous_mode(pf_addresses):
+    """Make sure the given GPUs are not in vGPU heterogeneous mode.
+
+    A GPU only exposes one vGPU type to Nova, so the equal-size mode, which
+    allows more vGPUs of some types per GPU, is enforced. The mode can only
+    change while no vGPU exists on the GPU, which is the case at boot.
+
+    :param pf_addresses: PCI addresses of the GPUs.
+    :type pf_addresses: List[str]
+    :returns: Error messages, empty on success.
+    :rtype: List[str]
+    """
+    errors = []
+    for pf_address in pf_addresses:
+        current = read_heterogeneous_mode(pf_address)
+        if current is None:
+            logging.warning('Heterogeneous mode of %s unknown, leaving it '
+                            'unchanged', pf_address)
+            continue
+        if not current:
+            continue
+        if any(read_current_vgpu_type(vf['pci_address'])
+               for vf in list_vfs(pf_address)):
+            errors.append('cannot disable heterogeneous mode on {} while '
+                          'vGPUs exist on it'.format(pf_address))
+            continue
+        try:
+            _nvidia_smi('vgpu', '-i', _nvidia_smi_gpu_index(pf_address),
+                        '-shm', '0')
+        except (OSError, subprocess.CalledProcessError) as error:
+            errors.append('disabling heterogeneous mode on {} failed: '
+                          '{}'.format(pf_address, error))
+            continue
+        if read_heterogeneous_mode(pf_address) is not False:
+            errors.append('heterogeneous mode of {} is still enabled after '
+                          'disabling it'.format(pf_address))
+            continue
+        logging.info('Heterogeneous mode disabled on %s', pf_address)
+    return errors
+
+
+def apply_desired_state(state):
+    """Write the desired vGPU type of every VF to sysfs.
+
+    VFs that already have the desired type are left alone, so the operation
+    can be repeated. VFs recorded with ``remove`` are skipped so their
+    vGPUs are not recreated at boot.
+
+    :param state: Desired VF-to-profile state.
+    :type state: DesiredState
+    :returns: Error messages, empty on success.
+    :rtype: List[str]
+    """
+    errors = []
+    for vf in sorted(state.vfs,
+                     key=lambda vf: (vf.pf_pci_address, vf.index)):
+        type_id = vf.profile['id']
+        label = '{} ({}) on {} virtfn{}'.format(
+            vf.profile['name'], type_id, vf.pf_pci_address, vf.index)
+        if vf.remove:
+            logging.info('%s: not recreating vGPU', label)
+            continue
+        address = vf_pci_address(vf.pf_pci_address, vf.index)
+        if address is None:
+            errors.append('{}: VF does not exist'.format(label))
+            continue
+        current = read_current_vgpu_type(address)
+        if current == type_id:
+            logging.info('%s: already configured on %s', label, address)
+            continue
+        if current is not None:
+            errors.append('{}: {} already has vGPU type {}'.format(
+                label, address, current))
+            continue
+        creatable = {vgpu_type['id'] for vgpu_type in
+                     read_creatable_vgpu_types(address)}
+        if type_id not in creatable:
+            errors.append('{}: not creatable on {}'.format(label, address))
+            continue
+        try:
+            with open(os.path.join(SYS_PCI_BASE, address, 'nvidia',
+                                   'current_vgpu_type'), 'w') as type_file:
+                type_file.write('{}\n'.format(type_id))
+        except OSError as error:
+            errors.append('{}: writing {} failed: {}'.format(
+                label, address, error))
+            continue
+        if read_current_vgpu_type(address) != type_id:
+            errors.append('{}: {} reports vGPU type {}'.format(
+                label, address, read_current_vgpu_type(address)))
+            continue
+        logging.info('%s: configured on %s', label, address)
+    return errors
+
+
+def main():
+    """Boot-time entry point used by nvidia-vgpu-host-setup.sh.
+
+    Records the vGPU types offered by the (still unassigned) VFs in the
+    catalog, makes sure heterogeneous mode is disabled, then applies the VF
+    vGPU types of the desired state written by the charm. Errors are written
+    to the failure file read by the charm's status check.
+    """
+    global SYS_PCI_BASE, NVIDIA_SMI
+    global DEFAULT_STATE_FILE, DEFAULT_CATALOG_FILE
+    NVIDIA_SMI = os.environ.get('NVIDIA_SMI', NVIDIA_SMI)
+    SYS_PCI_BASE = os.environ.get('SYS_PCI_BASE', SYS_PCI_BASE)
+    DEFAULT_STATE_FILE = os.environ.get('STATE_FILE', DEFAULT_STATE_FILE)
+    DEFAULT_CATALOG_FILE = os.environ.get('CATALOG_FILE',
+                                          DEFAULT_CATALOG_FILE)
+    failure_file = os.environ.get('FAILURE_FILE', DEFAULT_FAILURE_FILE)
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+    gpus = list_sriov_gpus()
+    write_catalog(update_catalog(read_catalog(), {
+        pf_address: list_vfs(pf_address) for pf_address in gpus
+    }))
+    errors = (disable_heterogeneous_mode(gpus) +
+              apply_desired_state(read_desired_state()))
+    for error in errors:
+        logging.error(error)
+    if errors:
+        with open(failure_file, 'w') as stream:
+            stream.write('\n'.join(errors) + '\n')
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
