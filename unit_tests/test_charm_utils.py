@@ -559,10 +559,109 @@ class TestVfioRelationData(FakeSysfsTestCase):
         self.assertEqual(relation_data, {})
 
 
+class TestVfioHostSetup(unittest.TestCase):
+
+    @patch.object(charm_utils, '_systemd_daemon_reload')
+    @patch.object(charm_utils, 'charm_dir', return_value='/charm')
+    @patch.object(charm_utils, 'service')
+    @patch.object(charm_utils, 'render')
+    @patch.object(charm_utils.shutil, 'copy')
+    @patch.object(charm_utils.os, 'chmod')
+    def test_install_vfio_host_setup(self, mock_chmod, mock_copy,
+                                     mock_render, mock_service,
+                                     _charm_dir, mock_reload):
+        charm_utils.install_vfio_host_setup()
+        mock_copy.assert_called_with(
+            'files/nvidia-vgpu-host-setup.sh',
+            '/opt/nvidia-vgpu-host-setup.sh')
+        mock_render.assert_called_with(
+            'nvidia-vgpu-host-setup.service',
+            '/etc/systemd/system/nvidia-vgpu-host-setup.service',
+            {'script_path': '/opt/nvidia-vgpu-host-setup.sh',
+             'charm_dir': '/charm'},
+            perms=0o644)
+        mock_service.assert_called_with('enable',
+                                        'nvidia-vgpu-host-setup')
+        mock_reload.assert_called_once_with()
+
+
+class TestVgpuInitWorkaroundBranching(unittest.TestCase):
+
+    @patch('charm_utils.nvidia_utils.detect_vgpu_mode_with_override')
+    @patch('charm_utils._disable_service_if_exists')
+    @patch('charm_utils.install_mdev_init_workaround')
+    @patch('charm_utils.install_vfio_host_setup')
+    def test_install_vgpu_init_workaround_mdev(
+        self, vfio_mock, mdev_mock, disable_mock, detect_mock
+    ):
+        detect_mock.return_value = 'mdev'
+        charm_utils.install_vgpu_init_workaround({'vgpu-mode': 'auto'})
+        mdev_mock.assert_called_once()
+        vfio_mock.assert_not_called()
+        disable_mock.assert_called_once_with('nvidia-vgpu-host-setup')
+
+    @patch('charm_utils.generate_vfio_desired_state')
+    @patch('charm_utils.nvidia_utils.detect_vgpu_mode_with_override')
+    @patch('charm_utils._disable_service_if_exists')
+    @patch('charm_utils.install_mdev_init_workaround')
+    @patch('charm_utils.install_vfio_host_setup')
+    def test_install_vgpu_init_workaround_vfio(
+        self, vfio_mock, mdev_mock, disable_mock, detect_mock, generate_mock
+    ):
+        detect_mock.return_value = 'vfio'
+        config = {'vgpu-mode': 'auto'}
+        charm_utils.install_vgpu_init_workaround(config)
+        vfio_mock.assert_called_once()
+        mdev_mock.assert_not_called()
+        disable_mock.assert_called_once_with('systemd-mdev-workaround')
+        generate_mock.assert_called_once_with(config)
+
+        generate_mock.side_effect = (
+            charm_utils.vfio_utils.InvalidGpuProfiles('bad'))
+        charm_utils.install_vgpu_init_workaround(config)
+
+    @patch('charm_utils.is_nvidia_software_to_be_installed')
+    @patch('charm_utils.nvidia_utils.detect_vgpu_mode_with_override')
+    @patch('charm_utils._disable_service_if_exists')
+    @patch('charm_utils.install_mdev_init_workaround')
+    @patch('charm_utils.install_vfio_host_setup')
+    def test_install_vgpu_init_workaround_undetected(
+        self, vfio_mock, mdev_mock, disable_mock, detect_mock, sw_mock
+    ):
+        detect_mock.return_value = 'none'
+        sw_mock.return_value = True
+        charm_utils.install_vgpu_init_workaround({'vgpu-mode': 'auto'})
+        mdev_mock.assert_called_once()
+        vfio_mock.assert_called_once_with()
+        disable_mock.assert_not_called()
+
+        vfio_mock.reset_mock()
+        sw_mock.return_value = False
+        charm_utils.install_vgpu_init_workaround({'vgpu-mode': 'auto'})
+        vfio_mock.assert_not_called()
+
+    @patch.object(charm_utils, '_systemd_daemon_reload')
+    @patch.object(charm_utils.os, 'remove')
+    @patch.object(charm_utils, 'service')
+    @patch.object(charm_utils.os.path, 'exists')
+    def test_disable_service_if_exists(self, exists_mock, service_mock,
+                                       remove_mock, reload_mock):
+        exists_mock.return_value = True
+
+        charm_utils._disable_service_if_exists('obsolete-service')
+        reload_mock.assert_called_once_with()
+
+        service_mock.assert_called_once_with('disable', 'obsolete-service')
+        remove_mock.assert_called_once_with(
+            '/etc/systemd/system/obsolete-service.service')
+
+
 class TestVfioStatus(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
+        self.sysfs = FakeSysfs()
+        self.addCleanup(self.sysfs.cleanup)
         self.dpkg = {'nova-common': {'version': '3:29.2.0-0ubuntu1.8+vgpu1'}}
         self.pending = []
         patches = [
@@ -583,8 +682,12 @@ class TestVfioStatus(unittest.TestCase):
             patch('charm_utils.vfio_utils.read_desired_state',
                   return_value=DesiredState(vfs=[
                       VfMapping(PF, 0, {'id': 560, 'name': 'A40-4Q'})])),
+            patch('charm_utils.vfio_utils.read_heterogeneous_mode',
+                  return_value=False),
             patch('charm_utils.split_live_vf_mappings',
                   side_effect=lambda _state: ([], self.pending)),
+            patch.object(charm_utils.vfio_utils, 'DEFAULT_FAILURE_FILE',
+                         self.sysfs.path('failed')),
         ]
         self.mocks = {}
         for patcher in patches:
@@ -600,6 +703,15 @@ class TestVfioStatus(unittest.TestCase):
     def test_ready(self):
         self.assertEqual(self.check_status(),
                          ActiveStatus('Unit is ready (1 GPU)'))
+
+    def test_host_setup_failure(self):
+        with open(self.sysfs.path('failed'), 'w') as failure_file:
+            failure_file.write('A40-4Q (560) on 0000:41:00.0 virtfn3: VF '
+                               'does not exist\nsecond error\n')
+
+        self.assertEqual(self.check_status(), BlockedStatus(
+            'VFIO host setup failed: A40-4Q (560) on 0000:41:00.0 virtfn3: '
+            'VF does not exist (see journalctl -u nvidia-vgpu-host-setup)'))
 
     def test_unsatisfied_intent(self):
         self.mocks['compute_vfio_desired_state'].side_effect = (
@@ -653,6 +765,16 @@ class TestVfioStatus(unittest.TestCase):
         self.pending = [VfMapping(PF, 0, {'id': 560, 'name': 'A40-4Q'})]
         self.assertEqual(self.check_status(), BlockedStatus(
             '1 vGPU profile change(s) pending, manual reboot required'))
+
+    def test_heterogeneous_mode_enabled(self):
+        self.mocks['read_heterogeneous_mode'].return_value = True
+        self.assertEqual(self.check_status(), BlockedStatus(
+            'vGPU heterogeneous mode enabled on 0000:41:00.0, manual reboot '
+            'required to disable it'))
+
+    def test_unknown_heterogeneous_mode_is_not_reported(self):
+        self.mocks['read_heterogeneous_mode'].return_value = None
+        self.assertIsInstance(self.check_status(), ActiveStatus)
 
     def test_mdev_mode_skips_vfio_checks(self):
         self.mocks['detect_vgpu_mode_with_override'].return_value = 'mdev'

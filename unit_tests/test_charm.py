@@ -53,6 +53,7 @@ class TestNovaComputeNvidiaVgpuCharm(CharmTestCase):
     _PATCHES = [
         'check_status',
         'install_nvidia_software_if_needed',
+        'install_vgpu_init_workaround',
         'is_nvidia_software_to_be_installed',
         'set_principal_unit_relation_data',
     ]
@@ -163,6 +164,30 @@ class TestNovaComputeNvidiaVgpuCharm(CharmTestCase):
         self.assertIn(output_file, results['result'])
         with open(output_file) as f:
             self.assertEqual(f.read(), '')
+
+    def test_start_publishes_relation_data(self):
+        self.check_status.return_value = ActiveStatus('Unit is ready')
+        self.is_nvidia_software_to_be_installed.return_value = False
+        relation_id = self.harness.add_relation('nova-vgpu', 'nova-compute')
+        self.harness.add_relation_unit(relation_id, 'nova-compute/0')
+        self.set_principal_unit_relation_data.reset_mock()
+        self.install_vgpu_init_workaround.reset_mock()
+
+        self.harness.charm.on.start.emit()
+
+        self.install_vgpu_init_workaround.assert_called_once_with(
+            self.harness.charm.config)
+        self.set_principal_unit_relation_data.assert_called_once()
+        self.assertTrue(self.harness.charm._stored.is_started)
+
+    def test_config_changed_reinstalls_mode_specific_workaround(self):
+        self.install_vgpu_init_workaround.reset_mock()
+        self.check_status.return_value = ActiveStatus('Unit is ready')
+
+        self.harness.update_config({'vgpu-mode': 'vfio'})
+
+        self.install_vgpu_init_workaround.assert_called_once_with(
+            self.harness.charm.config)
 
     @patch('charm.nvidia_utils.detect_vgpu_mode_with_override')
     @patch('charm.list_vgpu_types_vfio')
