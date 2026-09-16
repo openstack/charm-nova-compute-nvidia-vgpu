@@ -656,12 +656,28 @@ class TestVgpuInitWorkaroundBranching(unittest.TestCase):
             '/etc/systemd/system/obsolete-service.service')
 
 
+NOVA_CONF_WITH_PCI_IN_PLACEMENT = """[DEFAULT]
+debug = False
+[pci]
+device_spec = {"vendor_id": "10de", "address": "0000:41:00.4"}
+device_spec = {"vendor_id": "10de", "address": "0000:41:00.5"}
+report_in_placement = true
+[libvirt]
+live_migration_permit_post_copy = False
+[pci]
+alias = {"name": "A40-4Q"}
+"""
+
+
 class TestVfioStatus(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
         self.sysfs = FakeSysfs()
         self.addCleanup(self.sysfs.cleanup)
+        self.nova_conf = self.sysfs.path('nova.conf')
+        with open(self.nova_conf, 'w') as nova_conf:
+            nova_conf.write(NOVA_CONF_WITH_PCI_IN_PLACEMENT)
         self.dpkg = {'nova-common': {'version': '3:29.2.0-0ubuntu1.8+vgpu1'}}
         self.pending = []
         patches = [
@@ -686,6 +702,7 @@ class TestVfioStatus(unittest.TestCase):
                   return_value=False),
             patch('charm_utils.split_live_vf_mappings',
                   side_effect=lambda _state: ([], self.pending)),
+            patch.object(charm_utils, 'NOVA_CONF', self.nova_conf),
             patch.object(charm_utils.vfio_utils, 'DEFAULT_FAILURE_FILE',
                          self.sysfs.path('failed')),
         ]
@@ -760,6 +777,14 @@ class TestVfioStatus(unittest.TestCase):
         self.mocks['get_os_codename_package'].return_value = 'epoxy'
         self.dpkg = {}
         self.assertIsInstance(self.check_status(), ActiveStatus)
+
+    def test_no_pci_in_placement(self):
+        with open(self.nova_conf, 'w') as nova_conf:
+            nova_conf.write(NOVA_CONF_WITH_PCI_IN_PLACEMENT.replace(
+                'report_in_placement = true', ''))
+        result = self.check_status()
+        self.assertIsInstance(result, BlockedStatus)
+        self.assertIn('PCI-in-Placement', result.message)
 
     def test_pending_reboot(self):
         self.pending = [VfMapping(PF, 0, {'id': 560, 'name': 'A40-4Q'})]

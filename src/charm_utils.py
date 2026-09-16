@@ -15,6 +15,7 @@
 # limitations under the License.
 
 
+import configparser
 import logging
 import json
 import os
@@ -44,6 +45,7 @@ import nvidia_utils
 import vfio_utils
 
 
+NOVA_CONF = '/etc/nova/nova.conf'
 # First nova-common package carrying the backport of the Nova PCI
 # device_spec "managed" tag (Epoxy) to Caracal.
 VFIO_MIN_CARACAL_NOVA_VERSION = '3:29.2.0-0ubuntu1.8+vgpu1'
@@ -111,6 +113,27 @@ def install_nvidia_software_if_needed(stored, config, resources):
         # starting, thus it needs to be disabled. Unfortunately this requires
         # a reboot. The operator will be notified via a blocked unit status.
         nvidia_utils.disable_nouveau_driver()
+
+
+def check_pci_in_placement_enabled():
+    """Check if PCI-in-Placement reporting is enabled on the principal.
+
+    Reads /etc/nova/nova.conf to check [pci].report_in_placement.
+    Since this is a subordinate charm, we check the principal's nova.conf
+    on the unit (subordinates share the filesystem). The file repeats
+    options (device_spec, alias) and sections ([pci] is also rendered from
+    subordinate config), so the parser must not be strict.
+
+    :returns: True if PCI-in-Placement is enabled, False otherwise
+    :rtype: bool
+    """
+    config = configparser.ConfigParser(strict=False, interpolation=None)
+    try:
+        config.read(NOVA_CONF)
+    except configparser.Error as error:
+        logging.warning('Failed to parse %s: %s', NOVA_CONF, error)
+        return False
+    return config.getboolean('pci', 'report_in_placement', fallback=False)
 
 
 def vfio_release_blocker():
@@ -183,6 +206,12 @@ def check_status(config, services):
         release_blocker = vfio_release_blocker()
         if release_blocker:
             return BlockedStatus(release_blocker)
+        if not check_pci_in_placement_enabled():
+            return BlockedStatus(
+                'VFIO mode requires PCI-in-Placement reporting. '
+                'Set [pci]report_in_placement=True on nova-compute and '
+                '[filter_scheduler]pci_in_placement=True on '
+                'nova-cloud-controller.')
         desired_state = vfio_utils.read_desired_state()
         _, pending_vfs = split_live_vf_mappings(desired_state)
         if pending_vfs:
