@@ -273,3 +273,30 @@ class TestCharmUtils(unittest.TestCase):
             call('systemd-mdev-workaround.service',
                  '/etc/systemd/system/systemd-mdev-workaround.service', {},
                  perms=420)])
+
+
+class TestVgpuModeConfig(unittest.TestCase):
+
+    def test_vgpu_mode_default_is_auto(self):
+        """vgpu-mode config option defaults to 'auto'."""
+        import yaml
+        with open('config.yaml') as f:
+            config = yaml.safe_load(f)
+        self.assertIn('vgpu-mode', config['options'])
+        self.assertEqual(config['options']['vgpu-mode']['default'], 'auto')
+        self.assertIn('mdev', config['options']['vgpu-mode']['description'])
+        self.assertIn('vfio', config['options']['vgpu-mode']['description'])
+
+    def test_gpu_profiles_config_exists(self):
+        """gpu-profiles config option exists for VFIO mode."""
+        import yaml
+        with open('config.yaml') as f:
+            config = yaml.safe_load(f)
+        self.assertIn('gpu-profiles', config['options'])
+        self.assertIsNone(config['options']['gpu-profiles']['default'])
+
+    def test_no_heterogeneous_mode_config(self):
+        import yaml
+        with open('config.yaml') as f:
+            config = yaml.safe_load(f)
+        self.assertNotIn('heterogeneous-mode', config['options'])
