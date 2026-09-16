@@ -21,3 +21,41 @@ options:
       set up on all units regardless of the presence of NVIDIA GPU hardware. If
       false, the software will be installed and set up only on units where that
       hardware is present.
+  vgpu-mode:
+    type: string
+    default: auto
+    description: |
+      vGPU mode to use. 'auto' detects from sysfs (default). 'mdev' forces
+      the legacy mediated device framework (Ubuntu 22.04 / NVIDIA vGPU 16.x).
+      'vfio' forces the vendor-specific VFIO framework (Ubuntu 24.04 /
+      NVIDIA vGPU 17.x+ with SR-IOV capable GPUs).
+      .
+      When set to 'auto', VFIO mode takes priority if both paths exist.
+      Non-SR-IOV GPUs on a VFIO-mode host will not be configured for vGPU.
+  gpu-profiles:
+    type: string
+    default:
+    description: |
+      YAML-formatted dict for VFIO mode mapping GPU PCI addresses to the
+      desired vGPU profile and count, e.g.
+      .
+      {"0000:41:00.0": [{"type": "A40-4Q", "count": 12}],
+       "0000:81:00.0": [{"type": "A40-2Q", "count": 4, "policy": "fail"}]}
+      .
+      Each GPU takes a single profile: Nova reports all the VFs of a GPU
+      as one Placement resource provider with a single resource class, so
+      listing more than one profile for a GPU blocks the unit.
+      .
+      Profile names are the ones reported by the list-vgpu-types action
+      ('NVIDIA A40-4Q' and 'A40-4Q' are equivalent) and 'count' is the
+      number of VFs that get the profile.
+      .
+      The optional 'policy' field ('ignore' or 'fail') controls behavior
+      when an intent cannot be met. Default is 'ignore'. When set to
+      'fail', the unit enters blocked state until the intent can be met
+      or the policy is changed to 'ignore'.
+      .
+      Profiles are applied to the VFs at boot; changes take effect after a
+      reboot of the compute node.
+      .
+      Only used when vgpu-mode is 'vfio' (or 'auto' with VFIO detected).
