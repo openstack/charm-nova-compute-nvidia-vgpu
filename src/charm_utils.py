@@ -30,7 +30,8 @@ from charmhelpers.contrib.openstack.utils import (
 from charmhelpers.core.hookenv import cached
 from charmhelpers.core.host import file_hash, service
 from charmhelpers.core.templating import render
-from charmhelpers.fetch import apt_install
+from charmhelpers.fetch import apt_cache, apt_install
+from charmhelpers.fetch.ubuntu_apt_pkg import version_compare
 
 from ops.model import (
     ActiveStatus,
@@ -39,6 +40,12 @@ from ops.model import (
 )
 
 import nvidia_utils
+import vfio_utils
+
+
+# First nova-common package carrying the backport of the Nova PCI
+# device_spec "managed" tag (Epoxy) to Caracal.
+VFIO_MIN_CARACAL_NOVA_VERSION = '3:29.2.0-0ubuntu1.8+vgpu1'
 
 
 class UnsupportedOpenStackRelease(Exception):
@@ -105,6 +112,33 @@ def install_nvidia_software_if_needed(stored, config, resources):
         nvidia_utils.disable_nouveau_driver()
 
 
+def vfio_release_blocker():
+    """Check that the installed Nova supports the PCI ``managed`` tag.
+
+    On Caracal an older nova-common only logs a warning, since the
+    backport may be shipped under a version the charm does not know.
+
+    :returns: A blocked status message, or None when supported.
+    :rtype: Optional[str]
+    """
+    release_name = _get_current_release()
+    release = CompareOpenStackReleases(release_name)
+    if release >= 'epoxy':
+        return None
+    if release == 'caracal':
+        version = (apt_cache().dpkg_list(['nova-common'])
+                   .get('nova-common', {}).get('version'))
+        if not version or version_compare(
+                version, VFIO_MIN_CARACAL_NOVA_VERSION) < 0:
+            logging.warning(
+                'VFIO mode requires nova-common >= %s on Caracal for the '
+                'PCI managed tag (installed: %s)',
+                VFIO_MIN_CARACAL_NOVA_VERSION, version or 'none')
+        return None
+    return ('VFIO mode requires OpenStack Caracal with the PCI managed '
+            'backport or Epoxy and later (found {})'.format(release_name))
+
+
 def check_status(config, services):
     """Determine the unit status to be set.
 
@@ -121,12 +155,34 @@ def check_status(config, services):
             not software_is_installed):
         return BlockedStatus("NVIDIA GPU detected, drivers not installed")
 
+    mode = nvidia_utils.detect_vgpu_mode_with_override(
+        config.get('vgpu-mode', 'auto'))
+    if mode == 'vfio':
+        try:
+            compute_vfio_desired_state(config)
+        except vfio_utils.InvalidGpuProfiles as error:
+            return BlockedStatus(str(error))
+        except vfio_utils.IntentNotSatisfiable as error:
+            return BlockedStatus(
+                'gpu-profiles cannot be satisfied: {}'.format(error))
+
     _, services_not_running_msg = ows_check_services_running(services,
                                                              ports=[])
     software_is_running = services_not_running_msg is None
 
     if software_is_installed and not software_is_running:
         return BlockedStatus("manual reboot required")
+
+    if mode == 'vfio':
+        release_blocker = vfio_release_blocker()
+        if release_blocker:
+            return BlockedStatus(release_blocker)
+        desired_state = vfio_utils.read_desired_state()
+        _, pending_vfs = split_live_vf_mappings(desired_state)
+        if pending_vfs:
+            return BlockedStatus(
+                '{} vGPU profile change(s) pending, manual reboot '
+                'required'.format(len(pending_vfs)))
 
     nvidia_gpu_hardware, num_gpus = nvidia_utils.has_nvidia_gpu_hardware()
     unit_status_msg = "{} GPU".format(num_gpus)
@@ -138,6 +194,9 @@ def set_principal_unit_relation_data(relation_data_to_be_set, config,
                                      services):
     """Pass configuration to a principal unit.
 
+    Branches on detected vGPU mode (mdev or vfio) to generate the
+    appropriate Nova config sections.
+
     :param relation_data_to_be_set: Relation data bag to principal unit.
     :type relation_data_to_be_set: ops.model.RelationData
     :param config: Juju application config.
@@ -146,11 +205,26 @@ def set_principal_unit_relation_data(relation_data_to_be_set, config,
     :type services: List[str]
     :raises: UnsupportedOpenStackRelease
     """
+    mode = nvidia_utils.detect_vgpu_mode_with_override(
+        config.get('vgpu-mode', 'auto'))
+
+    if mode == 'vfio':
+        _set_principal_relation_data_vfio(relation_data_to_be_set, config,
+                                          services)
+    elif mode == 'mdev':
+        _set_principal_relation_data_mdev(relation_data_to_be_set, config,
+                                          services)
+    else:
+        logging.info('No vGPU mode detected, skipping relation data')
+
+
+def _set_principal_relation_data_mdev(relation_data_to_be_set, config,
+                                      services):
+    """Set relation data for mdev mode (existing behavior)."""
     vgpu_device_mappings_str = config.get('vgpu-device-mappings')
     if vgpu_device_mappings_str is not None:
         vgpu_device_mappings = YAML().load(vgpu_device_mappings_str)
-
-        if vgpu_device_mappings is None:  # happens when passing an empty str
+        if vgpu_device_mappings is None:
             vgpu_device_mappings = {}
 
         logging.debug('vgpu-device-mappings={}'.format(vgpu_device_mappings))
@@ -163,13 +237,130 @@ def set_principal_unit_relation_data(relation_data_to_be_set, config,
             }
         })
         relation_data_to_be_set['subordinate_configuration'] = nova_conf
-        logging.debug(
-            'relation data to principal unit set to '
-            'subordinate_configuration={}'.format(nova_conf))
-
         relation_data_to_be_set['services'] = json.dumps(services)
         relation_data_to_be_set['releases-packages-map'] = json.dumps(
             _releases_packages_map(), sort_keys=True)
+
+
+def _set_principal_relation_data_vfio(relation_data_to_be_set, config,
+                                      services):
+    """Set relation data for VFIO mode."""
+    release_blocker = vfio_release_blocker()
+    if release_blocker:
+        logging.error(release_blocker)
+        return
+
+    try:
+        desired_state = generate_vfio_desired_state(config)
+    except (vfio_utils.InvalidGpuProfiles,
+            vfio_utils.IntentNotSatisfiable) as error:
+        logging.error('VFIO intent cannot be satisfied: %s', error)
+        return
+
+    live_vfs, pending_vfs = split_live_vf_mappings(desired_state)
+    if pending_vfs:
+        logging.info('%d VF profile change(s) will be applied at the '
+                     'next reboot', len(pending_vfs))
+
+    nova_conf = json.dumps({
+        'nova': {
+            '/etc/nova/nova.conf': {
+                'sections': _nova_conf_sections_vfio(live_vfs)
+            }
+        }
+    })
+    relation_data_to_be_set['subordinate_configuration'] = nova_conf
+    relation_data_to_be_set['services'] = json.dumps(services)
+    relation_data_to_be_set['releases-packages-map'] = json.dumps(
+        _releases_packages_map(), sort_keys=True)
+    relation_data_to_be_set['pci-alias-fragments'] = json.dumps(
+        _controller_pci_alias_fragments(live_vfs))
+
+
+def compute_vfio_desired_state(config):
+    """Resolve the gpu-profiles intent against the host, without writing.
+
+    :param config: Juju application config
+    :type config: ops.model.ConfigData
+    :returns: The resolved state and the updated vGPU type catalog.
+    :rtype: Tuple[vfio_utils.DesiredState, Dict[str, Dict[int, str]]]
+    :raises: vfio_utils.InvalidGpuProfiles, vfio_utils.IntentNotSatisfiable
+    """
+    intent = vfio_utils.parse_gpu_profiles(config.get('gpu-profiles'))
+    pf_addresses = nvidia_utils._find_nvidia_gpu_pci_addresses()
+
+    errors = []
+    for pf_address in sorted(set(intent) - set(pf_addresses)):
+        message = 'GPU {} from gpu-profiles not found'.format(pf_address)
+        if any(spec['policy'] == 'fail' for spec in intent[pf_address]):
+            errors.append(message)
+        else:
+            logging.warning('%s (policy=ignore)', message)
+        del intent[pf_address]
+
+    vfs_by_pf = {}
+    for pf_address in pf_addresses:
+        vfs = vfio_utils.list_vfs(pf_address)
+        if not vfs:
+            logging.info('No VFs enabled on %s, it is not configured for '
+                         'vGPU', pf_address)
+            continue
+        for vf in vfs:
+            vf['current'] = vfio_utils.read_current_vgpu_type(
+                vf['pci_address'])
+        vfs_by_pf[pf_address] = vfs
+
+    catalog = vfio_utils.update_catalog(vfio_utils.read_catalog(), vfs_by_pf)
+    try:
+        state = vfio_utils.reconcile_vf_profiles(
+            intent, vfs_by_pf, vfio_utils.read_desired_state(), catalog)
+    except vfio_utils.IntentNotSatisfiable as error:
+        errors.append(str(error))
+    if errors:
+        raise vfio_utils.IntentNotSatisfiable('; '.join(errors))
+    return state, catalog
+
+
+def generate_vfio_desired_state(config):
+    """Resolve the gpu-profiles intent and persist state and catalog.
+
+    :param config: Juju application config
+    :type config: ops.model.ConfigData
+    :returns: The resolved DesiredState
+    :rtype: vfio_utils.DesiredState
+    :raises: vfio_utils.InvalidGpuProfiles, vfio_utils.IntentNotSatisfiable
+    """
+    state, catalog = compute_vfio_desired_state(config)
+    vfio_utils.write_catalog(catalog)
+    vfio_utils.write_desired_state(state)
+    logging.info('Wrote VFIO desired state with %d VFs', len(state.vfs))
+    return state
+
+
+def split_live_vf_mappings(desired_state):
+    """Split desired VF assignments by whether sysfs already reflects them.
+
+    VFs recorded with ``remove`` are pending while the vGPU to drop is
+    still configured on them.
+
+    :returns: (live, pending) where live is a list of (VfMapping, VF PCI
+              address) tuples and pending a list of VfMapping.
+    :rtype: Tuple[List[Tuple[vfio_utils.VfMapping, str]],
+                  List[vfio_utils.VfMapping]]
+    """
+    live, pending = [], []
+    for vf in desired_state.vfs:
+        address = vfio_utils.vf_pci_address(vf.pf_pci_address, vf.index)
+        current = (vfio_utils.read_current_vgpu_type(address)
+                   if address else None)
+        if vf.remove:
+            if current == vf.profile['id']:
+                pending.append(vf)
+        elif current == vf.profile['id']:
+            live.append((vf, address))
+        else:
+            pending.append(vf)
+    return live, pending
 
 
 def _path_and_hash_nvidia_resource(resources):
@@ -237,6 +428,57 @@ def _nova_conf_sections(vgpu_device_mappings):
         return result
 
     raise UnsupportedOpenStackRelease(current_release_name)
+
+
+def _nova_conf_sections_vfio(live_vfs):
+    """Generate Nova [pci] config sections for VFIO mode.
+
+    :param live_vfs: (VfMapping, VF PCI address) tuples, see
+                     split_live_vf_mappings().
+    :type live_vfs: List[Tuple[vfio_utils.VfMapping, str]]
+    :returns: Dict of section names to lists of (key, value) tuples
+    :rtype: Dict[str, List[Tuple[str, str]]]
+    """
+    pci_entries = []
+    for vf, address in live_vfs:
+        pci_entries.append(('device_spec', json.dumps({
+            'vendor_id': '10de',
+            'address': address,
+            'resource_class': _resource_class(vf.profile['id']),
+            'managed': 'no',
+        })))
+    pci_entries.extend(
+        ('alias', alias) for alias in _controller_pci_alias_fragments(
+            live_vfs))
+
+    return {
+        'pci': pci_entries,
+        'libvirt': [
+            ('live_migration_permit_post_copy', 'False'),
+        ],
+    }
+
+
+def _resource_class(profile_id):
+    return 'CUSTOM_NVIDIA_{}'.format(profile_id)
+
+
+def _controller_pci_alias_fragments(live_vfs):
+    """Generate one [pci].alias JSON string per vGPU profile in use.
+
+    :param live_vfs: (VfMapping, VF PCI address) tuples.
+    :type live_vfs: List[Tuple[vfio_utils.VfMapping, str]]
+    :rtype: List[str]
+    """
+    profiles = {vf.profile['id']: vf.profile['name'] for vf, _ in live_vfs}
+    return [
+        json.dumps({
+            'device_type': 'type-VF',
+            'resource_class': _resource_class(profile_id),
+            'name': profiles[profile_id],
+        })
+        for profile_id in sorted(profiles)
+    ]
 
 
 def _releases_packages_map():
