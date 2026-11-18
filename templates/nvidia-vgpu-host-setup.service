@@ -1,6 +1,6 @@
 [Unit]
 Description=NVIDIA vGPU Host Setup (VF enablement + profile assignment)
-Before=nova-compute.service
+Before=nova-compute.service jujud-*.service
 After=nvidia-vgpu-mgr.service nvidia-vgpud.service libvirtd.service
 Wants=nvidia-vgpu-mgr.service nvidia-vgpud.service
 
@@ -8,6 +8,7 @@ Wants=nvidia-vgpu-mgr.service nvidia-vgpud.service
 User=root
 Type=oneshot
 RemainAfterExit=yes
+TimeoutStartSec=300
 Environment=VGPU_CHARM_DIR={{ charm_dir }}
 ExecStart={{ script_path }}
 

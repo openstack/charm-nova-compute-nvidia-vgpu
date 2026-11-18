@@ -183,9 +183,16 @@ reboot required to disable it`.
 
 The charm never changes the vGPU type of a VF at runtime, since a VF may be in
 use by an instance. Profiles are applied by the `nvidia-vgpu-host-setup`
-service at boot, before `nova-compute` starts. Until then the unit reports
+service at boot, ordered before the Juju agents and `nova-compute`, so Juju
+hooks only run once the VF assignments are final: a hook publishing the live
+VFs to the principal before the assignment completes would hand Nova an empty
+PCI configuration. Until the profiles are applied the unit reports
 `N vGPU profile change(s) pending, manual reboot required`, and only VFs
 that already carry their desired profile are passed to Nova.
+
+The setup unit gives up after 300 seconds if the NVIDIA driver hangs, so the
+Juju agents and `nova-compute` are not held up forever; the leftover work is
+reported as pending profile changes.
 
 On a new compute node, two reboots are needed: the first one loads the NVIDIA
 driver and enables the VFs so the charm can resolve `gpu-profiles`; the

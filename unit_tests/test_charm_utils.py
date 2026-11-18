@@ -584,6 +584,25 @@ class TestVfioHostSetup(unittest.TestCase):
                                         'nvidia-vgpu-host-setup')
         mock_reload.assert_called_once_with()
 
+    def test_unit_ordered_before_jujud_and_bounded(self):
+        """The Juju agents must not start before the profiles are assigned.
+
+        Hooks such as start publish the live VFs to the principal; running
+        before the assignment completes hands Nova an empty PCI
+        configuration. The setup is also time-bounded so a hanging
+        NVIDIA driver cannot hold the agents hostage forever.
+        """
+        content = charm_utils.render(
+            'nvidia-vgpu-host-setup.service', None,
+            {'script_path': '/opt/nvidia-vgpu-host-setup.sh',
+             'charm_dir': '/charm'},
+            templates_dir=os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                'templates'))
+        self.assertIn('Before=nova-compute.service jujud-*.service',
+                      content)
+        self.assertIn('TimeoutStartSec=300', content)
+
 
 class TestVgpuInitWorkaroundBranching(unittest.TestCase):
 
